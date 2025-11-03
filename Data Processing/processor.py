@@ -61,12 +61,14 @@ class BiocapacityProcessor:
         results_table_sql = """
         CREATE TABLE IF NOT EXISTS biocapacity_results (
             id SERIAL PRIMARY KEY,
+            solris_code INTEGER,
             solris_class TEXT NOT NULL,
             biocapacity_category TEXT NOT NULL,
             area_hectares DECIMAL(12,4) NOT NULL,
             biocapacity_conversion_factor DECIMAL(4,2) NOT NULL,
             biocapacity_gha DECIMAL(12,4) NOT NULL,
-            percentage_of_total DECIMAL(5,2) NOT NULL
+            percentage_of_total DECIMAL(5,2) NOT NULL,
+            FOREIGN KEY(solris_code) REFERENCES solris_lookup(solris_code)
         );
         """
         
@@ -74,6 +76,7 @@ class BiocapacityProcessor:
         carbon_table_sql = """
         CREATE TABLE IF NOT EXISTS carbon_sequestration_results (
             id SERIAL PRIMARY KEY,
+            solris_code INTEGER,
             solris_class TEXT NOT NULL,
             area_hectares DECIMAL(12,4) NOT NULL,
             agc_tc_ha DECIMAL(8,4) NOT NULL,
@@ -83,7 +86,8 @@ class BiocapacityProcessor:
             total_carbon_tc DECIMAL(12,4) NOT NULL,
             ssc DECIMAL(12,4) NOT NULL,
             ssc_density DECIMAL(12,6) NOT NULL,
-            percentage_of_total DECIMAL(5,2) NOT NULL
+            percentage_of_total DECIMAL(5,2) NOT NULL,
+            FOREIGN KEY(solris_code) REFERENCES solris_lookup(solris_code)
         );
         """
 
@@ -91,11 +95,13 @@ class BiocapacityProcessor:
         water_table_sql = """
         CREATE TABLE IF NOT EXISTS water_filtration_results (
             id SERIAL PRIMARY KEY,
+            solris_code INTEGER,
             solris_class TEXT NOT NULL,
             area_hectares DECIMAL(12,4) NOT NULL,
             wf_value_per_ha DECIMAL(12,4) NOT NULL,
             total_wf_value DECIMAL(14,4) NOT NULL,
-            percentage_of_total DECIMAL(5,2) NOT NULL
+            percentage_of_total DECIMAL(5,2) NOT NULL,
+            FOREIGN KEY(solris_code) REFERENCES solris_lookup(solris_code)
         );
         """
 
@@ -103,11 +109,13 @@ class BiocapacityProcessor:
         aesthetic_table_sql = """
         CREATE TABLE IF NOT EXISTS aesthetic_quality_results (
             id SERIAL PRIMARY KEY,
+            solris_code INTEGER,
             solris_class TEXT NOT NULL,
             area_hectares DECIMAL(12,4) NOT NULL,
             naturalness_score DECIMAL(4,2) NOT NULL,
             rarity_score INTEGER NOT NULL,
-            aesthetic_quality_score DECIMAL(5,2) NOT NULL
+            aesthetic_quality_score DECIMAL(5,2) NOT NULL,
+            FOREIGN KEY(solris_code) REFERENCES solris_lookup(solris_code)
         );
         """
         
@@ -136,7 +144,7 @@ class BiocapacityProcessor:
         if not table_name:
             raise ValueError(f"Unknown mode for clearing results: {mode}")
         with self.engine.connect() as conn:
-            conn.execute(text(f"DELETE FROM {table_name};"))
+            conn.execute(text(f"DROP TABLE {table_name};"))
             conn.commit()
             logger.info(f"Cleared results table: {table_name}")
     
@@ -145,13 +153,13 @@ class BiocapacityProcessor:
         with self.engine.connect() as conn:
             # Clear dependent tables first (in reverse dependency order)
             # UPDATED: Added aesthetic_quality_results
-            conn.execute(text("DELETE FROM aesthetic_quality_results;"))
-            conn.execute(text("DELETE FROM carbon_sequestration_results;"))
-            conn.execute(text("DELETE FROM water_filtration_results;"))
-            conn.execute(text("DELETE FROM biocapacity_results;"))
-            conn.execute(text("DELETE FROM solris_lookup;"))
+            conn.execute(text("DROP TABLE aesthetic_quality_results;"))
+            conn.execute(text("DROP TABLE carbon_sequestration_results;"))
+            conn.execute(text("DROP TABLE water_filtration_results;"))
+            conn.execute(text("DROP TABLE biocapacity_results;"))
+            conn.execute(text("DROP TABLE solris_lookup;"))
             conn.commit()
-            logger.info("All data cleared from database tables")
+            logger.info("All database tables cleared")
     
     def load_solris_lookup_table(self, csv_path, custom_factors=None):
         """
@@ -383,7 +391,7 @@ class BiocapacityProcessor:
         if type == 'biocapacity':
             # Select only needed columns for database
             results_cols = [
-                'solris_class',
+                'solris_code', 'solris_class',
                 'biocapacity_category', 'area_hectares', 'biocapacity_conversion_factor', 
                 'biocapacity_gha', 'percentage_of_total'
             ]
@@ -398,7 +406,7 @@ class BiocapacityProcessor:
         elif type == 'carbon':
             # Select only needed columns for database
             results_cols = [
-                'solris_class',
+                'solris_code', 'solris_class',
                 'area_hectares', 'agc_tc_ha', 'bgc_tc_ha', 'soc_tc_ha', 'deoc_tc_ha',
                 'total_carbon_tc', 'ssc', 'percentage_of_total'
             ]
@@ -415,7 +423,7 @@ class BiocapacityProcessor:
         elif type == 'water':
             # Select columns for water filtration
             results_cols = [
-                'solris_class',
+                'solris_code', 'solris_class',
                 'area_hectares', 'wf_value_per_ha', 'total_wf_value', 'percentage_of_total'
             ]
             # Round area_hectares to 4 decimal places
@@ -429,7 +437,7 @@ class BiocapacityProcessor:
         # NEW: Save aesthetic quality results
         elif type == 'aesthetic':
             results_cols = [
-                'solris_class', 'area_hectares', 'naturalness_score',
+                'solris_code', 'solris_class', 'area_hectares', 'naturalness_score',
                 'rarity_score', 'aesthetic_quality_score'
             ]
             results_df['area_hectares'] = results_df['area_hectares'].round(4)
@@ -712,6 +720,7 @@ class BiocapacityProcessor:
             query = """
             SELECT 
                 solris_class,
+                solris_code,
                 biocapacity_category,
                 area_hectares,
                 biocapacity_conversion_factor,
@@ -726,6 +735,7 @@ class BiocapacityProcessor:
             query = """
             SELECT 
                 solris_class,
+                solris_code,
                 area_hectares,
                 agc_tc_ha,
                 bgc_tc_ha,
@@ -742,6 +752,7 @@ class BiocapacityProcessor:
             query = """
             SELECT
                 solris_class,
+                solris_code,
                 area_hectares,
                 wf_value_per_ha,
                 total_wf_value,
@@ -754,13 +765,15 @@ class BiocapacityProcessor:
         elif type == 'aesthetic':
             query = """
             SELECT
-                solris_class, area_hectares, naturalness_score, 
+                solris_class, solris_code, area_hectares, naturalness_score, 
                 rarity_score, aesthetic_quality_score
             FROM aesthetic_quality_results
             ORDER BY aesthetic_quality_score DESC
             """
         
         results_df = pd.read_sql(query, self.engine)
+        if 'solris_code' in results_df.columns:
+            results_df['solris_code'] = results_df['solris_code'].astype('Int64')
         
         # Write to CSV
         results_df.to_csv(output_path, index=False)
