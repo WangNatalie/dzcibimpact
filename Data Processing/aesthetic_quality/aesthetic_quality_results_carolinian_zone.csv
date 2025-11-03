@@ -1,30 +1,30 @@
-solris_class,area_hectares,naturalness_score,rarity_score,aesthetic_quality_score
-Treed Cliff and Talus,65.0139,6.0,5,5.67
-Open Cliff and Talus,6.0354,6.0,5,5.67
-Treed Sand Dune,248.3587,5.0,5,5.0
-Bog,1272.4086,5.0,5,5.0
-Fen,0.5649,5.0,5,5.0
-Open Beach/Bar,558.7053,5.0,5,5.0
-Thicket Swamp,6794.5791,5.0,5,5.0
-Open Sand Dune,638.4137,5.0,5,5.0
-Treed Swamp,120021.8555,5.0,4,4.67
-Marsh,25277.4824,5.0,4,4.67
-Open Water,35572.1553,5.0,4,4.67
-Deciduous Forest,151116.5419,5.0,3,4.34
-Mixed Forest,21466.2711,4.0,5,4.33
-Tallgrass Savannah,473.7644,4.0,5,4.33
-Open Tallgrass Prairie,239.9,4.0,5,4.33
-Treed Alvar,5.7258,4.0,5,4.33
-Shrub Alvar,7.0198,4.0,5,4.33
-Coniferous Forest,5756.7927,4.0,5,4.33
-Tallgrass Woodland,1132.9382,4.0,5,4.33
-Forest,6020.7403,4.0,5,4.33
-Built Up Area-Pervious,43833.1616,3.0,4,3.33
-Hedge Rows,14930.9495,2.0,5,2.99
-Plantation - Tree Cultivated,9458.6952,2.0,5,2.99
-Undifferentiated,389065.9426,3.0,2,2.67
-Extraction-Aggregate,5272.1646,1.0,5,2.32
-Extraction-Peat/Topsoil,19.4265,1.0,5,2.32
-Tilled,1249046.1767,2.0,1,1.67
-Built Up Area-Impervious,191639.237,1.0,3,1.66
-Transportation,121291.9194,0.0,3,0.99
+solris_class,solris_code,area_hectares,naturalness_score,rarity_score,aesthetic_quality_score
+Treed Cliff and Talus,43,65.0139,6.0,5,5.670000000000001
+Open Cliff and Talus,41,6.0354,6.0,5,5.670000000000001
+Treed Sand Dune,23,248.3587,5.0,5,5.0
+Bog,150,1272.4086,5.0,5,5.0
+Fen,140,0.5649,5.0,5,5.0
+Open Beach/Bar,11,558.7053,5.0,5,5.0
+Thicket Swamp,135,6794.5791,5.0,5,5.0
+Open Sand Dune,21,638.4137,5.0,5,5.0
+Treed Swamp,131,120021.8555,5.0,4,4.67
+Marsh,160,25277.4824,5.0,4,4.67
+Open Water,170,35572.1553,5.0,4,4.67
+Deciduous Forest,93,151116.5419,5.0,3,4.34
+Mixed Forest,92,21466.2711,4.0,5,4.33
+Tallgrass Savannah,82,473.7644,4.0,5,4.33
+Open Tallgrass Prairie,81,239.9,4.0,5,4.33
+Treed Alvar,53,5.7258,4.0,5,4.33
+Shrub Alvar,52,7.0198,4.0,5,4.33
+Coniferous Forest,91,5756.7927,4.0,5,4.33
+Tallgrass Woodland,83,1132.9382,4.0,5,4.33
+Forest,90,6020.7403,4.0,5,4.33
+Built Up Area-Pervious,202,43833.1616,3.0,4,3.33
+Hedge Rows,192,14930.9495,2.0,5,2.99
+Plantation - Tree Cultivated,191,9458.6952,2.0,5,2.99
+Undifferentiated,250,389065.9426,3.0,2,2.6700000000000004
+Extraction-Aggregate,204,5272.1646,1.0,5,2.3200000000000003
+Extraction-Peat/Topsoil,205,19.4265,1.0,5,2.3200000000000003
+Tilled,193,1249046.1767,2.0,1,1.6700000000000002
+Built Up Area-Impervious,203,191639.237,1.0,3,1.6600000000000001
+Transportation,201,121291.9194,0.0,3,0.99

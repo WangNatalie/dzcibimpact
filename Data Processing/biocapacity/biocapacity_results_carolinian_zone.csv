@@ -1,30 +1,30 @@
-solris_class,biocapacity_category,area_hectares,biocapacity_conversion_factor,biocapacity_gha,percentage_of_total
-Tilled,100% Cropland,1249046.1767,5.6,6994658.5895,68.13
-Built Up Area-Impervious,100% Built-up land,191639.237,5.6,1073179.727,10.45
-Undifferentiated,32% Cropland/20% Grazing land/48% Grassland,389065.9426,2.46,957102.2189,9.32
-Transportation,100% Built-up land,121291.9194,5.6,679234.7486,6.62
-Built Up Area-Pervious,100% Built-up land,43833.1616,5.6,245465.7052,2.39
-Deciduous Forest,100% Forest: Dense,151116.5419,1.04,157161.2036,1.53
-Treed Swamp,40% Forest: Dense/60% Wetlands: Other,120021.8555,0.47,56410.2721,0.55
-Open Water,100% Freshwater,35572.1553,0.8,28457.7243,0.28
-Mixed Forest,100% Forest: Dense,21466.2711,1.04,22324.9219,0.22
-Hedge Rows,100% Forest: Dense,14930.9495,1.04,15528.1875,0.15
-Plantation - Tree Cultivated,100% Forest: Dense,9458.6952,1.04,9837.043,0.1
-Marsh,10% Forest: Sparse/90% Wetlands: Other,25277.4824,0.38,9605.4433,0.09
-Forest,100% Forest: Dense,6020.7403,1.04,6261.5699,0.06
-Coniferous Forest,100% Forest: Dense,5756.7927,1.04,5987.0644,0.06
-Thicket Swamp,15% Forest: Sparse/85% Wetlands: Other,6794.5791,0.4,2717.8317,0.03
-Tallgrass Woodland,55% Grassland/45% Forest: Dense,1132.9382,1.01,1144.2676,0.01
-Bog,100% Wetlands: Peat Bogs,1272.4086,0.61,776.1692,0.01
-Open Tallgrass Prairie,90% Grassland/10% Forest: Sparse,239.9,0.95,227.905,0.0
-Tallgrass Savannah,65% Grassand/35% Forest: Sparse,473.7644,0.23,108.9658,0.0
-Treed Sand Dune,65% Low Biocapacity/35% Forest: Sparse,248.3587,0.23,57.1225,0.0
-Treed Cliff and Talus,60% Low Biocapacity/40% Forest: Sparse,65.0139,0.26,16.9036,0.0
-Treed Alvar,60% Low Biocapacity/40% Forest: Sparse,5.7258,0.26,1.4887,0.0
-Shrub Alvar,80% Low Biocapacity/20% Forest: Sparse,7.0198,0.13,0.9126,0.0
-Fen,100% Wetlands: Peat Fens,0.5649,0.39,0.2203,0.0
-Open Cliff and Talus,100% Low Biocapacity,6.0354,0.0,0.0,0.0
-Open Beach/Bar,100% Low Biocapacity,558.7053,0.0,0.0,0.0
-Extraction-Aggregate,100% Extraction,5272.1646,0.0,0.0,0.0
-Extraction-Peat/Topsoil,100% Extraction,19.4265,0.0,0.0,0.0
-Open Sand Dune,100% Low Biocapacity,638.4137,0.0,0.0,0.0
+solris_class,solris_code,biocapacity_category,area_hectares,biocapacity_conversion_factor,biocapacity_gha,percentage_of_total
+Tilled,193,100% Cropland,1249046.1767,5.6,6994658.58952346,68.13244902370268
+Built Up Area-Impervious,203,100% Built-up land,191639.237,5.6,1073179.7270471747,10.45345703589148
+Undifferentiated,250,32% Cropland/20% Grazing land/48% Grassland,389065.9426,2.46,957102.2188501427,9.32278785328431
+Transportation,201,100% Built-up land,121291.9194,5.6,679234.7485577572,6.616180945636659
+Built Up Area-Pervious,202,100% Built-up land,43833.1616,5.6,245465.70519365172,2.390992988739013
+Deciduous Forest,93,100% Forest: Dense,151116.5419,1.04,157161.2035894864,1.5308506562568271
+Treed Swamp,131,40% Forest: Dense/60% Wetlands: Other,120021.8555,0.47,56410.272066756384,0.5494721346025445
+Open Water,170,100% Freshwater,35572.1553,0.8,28457.72425686005,0.2771964381742898
+Mixed Forest,92,100% Forest: Dense,21466.2711,1.04,22324.921928397907,0.21745902044782153
+Hedge Rows,192,100% Forest: Dense,14930.9495,1.04,15528.187493178442,0.15125447929568733
+Plantation - Tree Cultivated,191,100% Forest: Dense,9458.6952,1.04,9837.043038433783,0.09581909178010657
+Marsh,160,10% Forest: Sparse/90% Wetlands: Other,25277.4824,0.38,9605.443309585584,0.09356316227079675
+Forest,90,100% Forest: Dense,6020.7403,1.04,6261.569874353829,0.06099169599381828
+Coniferous Forest,91,100% Forest: Dense,5756.7927,1.04,5987.064440337122,0.058317837470132014
+Thicket Swamp,135,15% Forest: Sparse/85% Wetlands: Other,6794.5791,0.4,2717.8316552623555,0.02647341887201153
+Tallgrass Woodland,83,55% Grassland/45% Forest: Dense,1132.9382,1.01,1144.2675714627871,0.011145898114160262
+Bog,150,100% Wetlands: Peat Bogs,1272.4086,0.61,776.1692282380224,0.007560384785027305
+Open Tallgrass Prairie,81,90% Grassland/10% Forest: Sparse,239.9,0.95,227.90497821340165,0.0022199402746590022
+Tallgrass Savannah,82,65% Grassand/35% Forest: Sparse,473.7644,0.23,108.96580398165109,0.00106139663431556
+Treed Sand Dune,23,65% Low Biocapacity/35% Forest: Sparse,248.3587,0.23,57.12250076007748,0.0005564096976758301
+Treed Cliff and Talus,43,60% Low Biocapacity/40% Forest: Sparse,65.0139,0.26,16.90360625751392,0.0001646519378918353
+Treed Alvar,53,60% Low Biocapacity/40% Forest: Sparse,5.7258,0.26,1.4887079381072912,1.4500967617804322e-05
+Shrub Alvar,52,80% Low Biocapacity/20% Forest: Sparse,7.0198,0.13,0.9125743090897989,8.889057528487236e-06
+Fen,140,100% Wetlands: Peat Fens,0.5649,0.39,0.22032566718695268,2.1461129369076246e-06
+Open Cliff and Talus,41,100% Low Biocapacity,6.0354,0.0,0.0,0.0
+Open Beach/Bar,11,100% Low Biocapacity,558.7053,0.0,0.0,0.0
+Extraction-Aggregate,204,100% Extraction,5272.1646,0.0,0.0,0.0
+Extraction-Peat/Topsoil,205,100% Extraction,19.4265,0.0,0.0,0.0
+Open Sand Dune,21,100% Low Biocapacity,638.4137,0.0,0.0,0.0

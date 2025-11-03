@@ -4,12 +4,13 @@ from sqlalchemy import create_engine, text
 import logging
 import argparse
 import matplotlib.pyplot as plt
+from database_setup import setup_database
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class BiocapacityProcessor:
+class CIBImpactProcessor:
     def __init__(self, db_config):
         """
         Initialize processor with database configuration
@@ -196,8 +197,37 @@ class BiocapacityProcessor:
             
             # Clear existing data and insert new
             with self.engine.connect() as conn:
-                conn.execute(text("DROP TABLE solris_lookup;"))
-                conn.commit()
+                try:
+                    conn.execute(text("DELETE FROM solris_lookup;"))
+                    conn.commit()
+                    logger.info("Cleared existing data from solris_lookup table")
+                except Exception as e:
+                    # If deletion fails due to foreign key constraints, clear dependent tables first
+                    error_msg = str(e)
+                    if "violates foreign key constraint" in error_msg.lower() or "still referenced" in error_msg.lower() or "depends on" in error_msg.lower():
+                        logger.info("Clearing dependent tables first due to foreign key constraints...")
+                        # Clear all results tables first (they depend on solris_lookup)
+                        # Handle each table independently in case some don't exist
+                        tables_to_clear = [
+                            'biocapacity_results',
+                            'carbon_sequestration_results',
+                            'water_filtration_results',
+                            'aesthetic_quality_results'
+                        ]
+                        for table in tables_to_clear:
+                            try:
+                                conn.execute(text(f"TRUNCATE TABLE {table};"))
+                                logger.debug(f"Cleared {table}")
+                            except Exception as truncate_error:
+                                logger.debug(f"Table {table} may not exist yet: {truncate_error}")
+                        conn.commit()
+                        logger.info("Cleared all existing results tables")
+                        
+                        conn.execute(text("DELETE FROM solris_lookup;"))
+                        conn.commit()
+                        logger.info("Cleared existing data from solris_lookup table")
+                    else:
+                        raise
             
             # Load data to database
             df.to_sql('solris_lookup', self.engine, if_exists='append', index=False)
@@ -810,8 +840,14 @@ def main():
         'password': 'dzcibimpact'
     }
     
+    # Ensure database exists before connecting
+    logger.info("Checking if database exists...")
+    if not setup_database(db_config, create_user=False):
+        logger.error("Failed to set up database. Please check your PostgreSQL connection and credentials.")
+        return
+    
     # Initialize processor
-    processor = BiocapacityProcessor(db_config)
+    processor = CIBImpactProcessor(db_config)
     
     # Create/update database schema (idempotent)
     processor.create_database_schema()
