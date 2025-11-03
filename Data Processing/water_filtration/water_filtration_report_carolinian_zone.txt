@@ -1,0 +1,161 @@
+
+        WATER FILTRATION ANALYSIS REPORT
+        Study Area: carolinian_zone
+        Generated: 2025-10-13 10:15:05
+
+        ============================================================
+        SUMMARY BY SOLRIS CLASS
+        ============================================================
+
+        
+            Treed Swamp:
+            Area: 120,021.86 hectares (5.0% of total)
+            WF Value($)/ha: 5,397.00
+            Total WF Value($): 647,757,953.92 (71.8% of total)
+            
+            Marsh:
+            Area: 25,277.48 hectares (1.1% of total)
+            WF Value($)/ha: 8,297.00
+            Total WF Value($): 209,727,271.42 (23.3% of total)
+            
+            Thicket Swamp:
+            Area: 6,794.58 hectares (0.3% of total)
+            WF Value($)/ha: 5,397.00
+            Total WF Value($): 36,670,343.61 (4.1% of total)
+            
+            Bog:
+            Area: 1,272.41 hectares (0.1% of total)
+            WF Value($)/ha: 5,838.00
+            Total WF Value($): 7,428,321.24 (0.8% of total)
+            
+            Fen:
+            Area: 0.56 hectares (0.0% of total)
+            WF Value($)/ha: 3,477.00
+            Total WF Value($): 1,964.29 (0.0% of total)
+            
+            Tallgrass Savannah:
+            Area: 473.76 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Forest:
+            Area: 6,020.74 hectares (0.3% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Undifferentiated:
+            Area: 389,065.94 hectares (16.2% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Tilled:
+            Area: 1,249,046.18 hectares (52.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Open Water:
+            Area: 35,572.16 hectares (1.5% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Built Up Area-Pervious:
+            Area: 43,833.16 hectares (1.8% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Open Sand Dune:
+            Area: 638.41 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Coniferous Forest:
+            Area: 5,756.79 hectares (0.2% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Deciduous Forest:
+            Area: 151,116.54 hectares (6.3% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Open Beach/Bar:
+            Area: 558.71 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Transportation:
+            Area: 121,291.92 hectares (5.1% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Plantation - Tree Cultivated:
+            Area: 9,458.70 hectares (0.4% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Treed Cliff and Talus:
+            Area: 65.01 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Extraction-Aggregate:
+            Area: 5,272.16 hectares (0.2% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Shrub Alvar:
+            Area: 7.02 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Treed Alvar:
+            Area: 5.73 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Hedge Rows:
+            Area: 14,930.95 hectares (0.6% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Open Tallgrass Prairie:
+            Area: 239.90 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Extraction-Peat/Topsoil:
+            Area: 19.43 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Tallgrass Woodland:
+            Area: 1,132.94 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Treed Sand Dune:
+            Area: 248.36 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Mixed Forest:
+            Area: 21,466.27 hectares (0.9% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Open Cliff and Talus:
+            Area: 6.04 hectares (0.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+            Built Up Area-Impervious:
+            Area: 191,639.24 hectares (8.0% of total)
+            WF Value($)/ha: 0.00
+            Total WF Value($): 0.00 (0.0% of total)
+            
+        ============================================================
+        TOTALS
+        ============================================================
+        Total Area: 2,401,232.94 hectares
+        Total Water Filtration Value ($ millions CAD): 901.585854
+        

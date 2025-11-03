@@ -1,0 +1,189 @@
+
+        AESTHETIC QUALITY ANALYSIS REPORT
+        Study Area: carolinian_zone
+        Generated: 2025-10-17 15:01:45
+
+        ============================================================
+        SUMMARY BY SOLRIS CLASS
+        ============================================================
+        
+            Treed Cliff and Talus:
+            Aesthetic Score: 5.67
+              - Area: 65.01 hectares (0.0% of total)
+              - Naturalness Score: 6.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Open Cliff and Talus:
+            Aesthetic Score: 5.67
+              - Area: 6.04 hectares (0.0% of total)
+              - Naturalness Score: 6.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Treed Sand Dune:
+            Aesthetic Score: 5.00
+              - Area: 248.36 hectares (0.0% of total)
+              - Naturalness Score: 5.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Bog:
+            Aesthetic Score: 5.00
+              - Area: 1,272.41 hectares (0.1% of total)
+              - Naturalness Score: 5.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Fen:
+            Aesthetic Score: 5.00
+              - Area: 0.56 hectares (0.0% of total)
+              - Naturalness Score: 5.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Open Beach/Bar:
+            Aesthetic Score: 5.00
+              - Area: 558.71 hectares (0.0% of total)
+              - Naturalness Score: 5.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Thicket Swamp:
+            Aesthetic Score: 5.00
+              - Area: 6,794.58 hectares (0.3% of total)
+              - Naturalness Score: 5.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Open Sand Dune:
+            Aesthetic Score: 5.00
+              - Area: 638.41 hectares (0.0% of total)
+              - Naturalness Score: 5.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Treed Swamp:
+            Aesthetic Score: 4.67
+              - Area: 120,021.86 hectares (5.0% of total)
+              - Naturalness Score: 5.00
+              - Rarity Score: 4 (5=rarest, 1=most common)
+            
+            Marsh:
+            Aesthetic Score: 4.67
+              - Area: 25,277.48 hectares (1.1% of total)
+              - Naturalness Score: 5.00
+              - Rarity Score: 4 (5=rarest, 1=most common)
+            
+            Open Water:
+            Aesthetic Score: 4.67
+              - Area: 35,572.16 hectares (1.5% of total)
+              - Naturalness Score: 5.00
+              - Rarity Score: 4 (5=rarest, 1=most common)
+            
+            Deciduous Forest:
+            Aesthetic Score: 4.34
+              - Area: 151,116.54 hectares (6.3% of total)
+              - Naturalness Score: 5.00
+              - Rarity Score: 3 (5=rarest, 1=most common)
+            
+            Mixed Forest:
+            Aesthetic Score: 4.33
+              - Area: 21,466.27 hectares (0.9% of total)
+              - Naturalness Score: 4.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Tallgrass Savannah:
+            Aesthetic Score: 4.33
+              - Area: 473.76 hectares (0.0% of total)
+              - Naturalness Score: 4.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Open Tallgrass Prairie:
+            Aesthetic Score: 4.33
+              - Area: 239.90 hectares (0.0% of total)
+              - Naturalness Score: 4.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Treed Alvar:
+            Aesthetic Score: 4.33
+              - Area: 5.73 hectares (0.0% of total)
+              - Naturalness Score: 4.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Shrub Alvar:
+            Aesthetic Score: 4.33
+              - Area: 7.02 hectares (0.0% of total)
+              - Naturalness Score: 4.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Coniferous Forest:
+            Aesthetic Score: 4.33
+              - Area: 5,756.79 hectares (0.2% of total)
+              - Naturalness Score: 4.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Tallgrass Woodland:
+            Aesthetic Score: 4.33
+              - Area: 1,132.94 hectares (0.0% of total)
+              - Naturalness Score: 4.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Forest:
+            Aesthetic Score: 4.33
+              - Area: 6,020.74 hectares (0.3% of total)
+              - Naturalness Score: 4.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Built Up Area-Pervious:
+            Aesthetic Score: 3.33
+              - Area: 43,833.16 hectares (1.8% of total)
+              - Naturalness Score: 3.00
+              - Rarity Score: 4 (5=rarest, 1=most common)
+            
+            Hedge Rows:
+            Aesthetic Score: 2.99
+              - Area: 14,930.95 hectares (0.6% of total)
+              - Naturalness Score: 2.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Plantation - Tree Cultivated:
+            Aesthetic Score: 2.99
+              - Area: 9,458.70 hectares (0.4% of total)
+              - Naturalness Score: 2.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Undifferentiated:
+            Aesthetic Score: 2.67
+              - Area: 389,065.94 hectares (16.2% of total)
+              - Naturalness Score: 3.00
+              - Rarity Score: 2 (5=rarest, 1=most common)
+            
+            Extraction-Aggregate:
+            Aesthetic Score: 2.32
+              - Area: 5,272.16 hectares (0.2% of total)
+              - Naturalness Score: 1.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Extraction-Peat/Topsoil:
+            Aesthetic Score: 2.32
+              - Area: 19.43 hectares (0.0% of total)
+              - Naturalness Score: 1.00
+              - Rarity Score: 5 (5=rarest, 1=most common)
+            
+            Tilled:
+            Aesthetic Score: 1.67
+              - Area: 1,249,046.18 hectares (52.0% of total)
+              - Naturalness Score: 2.00
+              - Rarity Score: 1 (5=rarest, 1=most common)
+            
+            Built Up Area-Impervious:
+            Aesthetic Score: 1.66
+              - Area: 191,639.24 hectares (8.0% of total)
+              - Naturalness Score: 1.00
+              - Rarity Score: 3 (5=rarest, 1=most common)
+            
+            Transportation:
+            Aesthetic Score: 0.99
+              - Area: 121,291.92 hectares (5.1% of total)
+              - Naturalness Score: 0.00
+              - Rarity Score: 3 (5=rarest, 1=most common)
+            
+        ============================================================
+        TOTALS
+        ============================================================
+        Total Area: 2,401,232.94 hectares
+        Area-Weighted Average Aesthetic Score: 2.29
+        

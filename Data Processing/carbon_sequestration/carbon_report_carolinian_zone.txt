@@ -1,0 +1,366 @@
+
+        CARBON SEQUESTRATION ANALYSIS REPORT
+        Study Area: carolinian_zone
+        Generated: 2025-10-12 22:34:52
+
+        ============================================================
+        SUMMARY BY SOLRIS CLASS
+        ============================================================
+
+        
+            Tilled:
+            Area: 1,249,046.18 hectares (52.0% of total)
+            Total Carbon: 51,173,421.86 tonnes C (25.6% of total)
+            Carbon Density: 40.97 tC/ha
+            Breakdown per hectare:
+              - AGC: 3.62 tC/ha
+              - BGC: 2.61 tC/ha  
+              - SOC: 34.24 tC/ha
+              - DeOC: 0.50 tC/ha
+              - SSC: $10324.00 $CAD/ha
+            Total SSC: $12,895.702300 million CAD
+            
+            Deciduous Forest:
+            Area: 151,116.54 hectares (6.3% of total)
+            Total Carbon: 47,934,167.09 tonnes C (23.9% of total)
+            Carbon Density: 317.20 tC/ha
+            Breakdown per hectare:
+              - AGC: 155.80 tC/ha
+              - BGC: 16.00 tC/ha  
+              - SOC: 127.20 tC/ha
+              - DeOC: 18.20 tC/ha
+              - SSC: $79934.00 $CAD/ha
+            Total SSC: $12,079.410100 million CAD
+            
+            Treed Swamp:
+            Area: 120,021.86 hectares (5.0% of total)
+            Total Carbon: 45,527,890.43 tonnes C (22.7% of total)
+            Carbon Density: 379.33 tC/ha
+            Breakdown per hectare:
+              - AGC: 60.96 tC/ha
+              - BGC: 4.52 tC/ha  
+              - SOC: 309.00 tC/ha
+              - DeOC: 4.85 tC/ha
+              - SSC: $95591.00 $CAD/ha
+            Total SSC: $11,473.028400 million CAD
+            
+            Undifferentiated:
+            Area: 389,065.94 hectares (16.2% of total)
+            Total Carbon: 23,871,685.60 tonnes C (11.9% of total)
+            Carbon Density: 61.36 tC/ha
+            Breakdown per hectare:
+              - AGC: 2.78 tC/ha
+              - BGC: 5.14 tC/ha  
+              - SOC: 52.78 tC/ha
+              - DeOC: 0.65 tC/ha
+              - SSC: $15462.00 $CAD/ha
+            Total SSC: $6,015.664800 million CAD
+            
+            Marsh:
+            Area: 25,277.48 hectares (1.1% of total)
+            Total Carbon: 7,805,686.56 tonnes C (3.9% of total)
+            Carbon Density: 308.80 tC/ha
+            Breakdown per hectare:
+              - AGC: 15.50 tC/ha
+              - BGC: 4.00 tC/ha  
+              - SOC: 288.70 tC/ha
+              - DeOC: 0.60 tC/ha
+              - SSC: $77818.00 $CAD/ha
+            Total SSC: $1,967.033000 million CAD
+            
+            Mixed Forest:
+            Area: 21,466.27 hectares (0.9% of total)
+            Total Carbon: 6,548,285.99 tonnes C (3.3% of total)
+            Carbon Density: 305.05 tC/ha
+            Breakdown per hectare:
+              - AGC: 158.50 tC/ha
+              - BGC: 11.75 tC/ha  
+              - SOC: 122.20 tC/ha
+              - DeOC: 12.60 tC/ha
+              - SSC: $76873.00 $CAD/ha
+            Total SSC: $1,650.168100 million CAD
+            
+            Hedge Rows:
+            Area: 14,930.95 hectares (0.6% of total)
+            Total Carbon: 3,537,141.94 tonnes C (1.8% of total)
+            Carbon Density: 236.90 tC/ha
+            Breakdown per hectare:
+              - AGC: 99.90 tC/ha
+              - BGC: 9.00 tC/ha  
+              - SOC: 121.25 tC/ha
+              - DeOC: 6.75 tC/ha
+              - SSC: $59699.00 $CAD/ha
+            Total SSC: $891.359800 million CAD
+            
+            Built Up Area-Impervious:
+            Area: 191,639.24 hectares (8.0% of total)
+            Total Carbon: 2,849,675.45 tonnes C (1.4% of total)
+            Carbon Density: 14.87 tC/ha
+            Breakdown per hectare:
+              - AGC: 0.10 tC/ha
+              - BGC: 0.00 tC/ha  
+              - SOC: 14.77 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $3747.00 $CAD/ha
+            Total SSC: $718.118200 million CAD
+            
+            Plantation - Tree Cultivated:
+            Area: 9,458.70 hectares (0.4% of total)
+            Total Carbon: 2,240,764.90 tonnes C (1.1% of total)
+            Carbon Density: 236.90 tC/ha
+            Breakdown per hectare:
+              - AGC: 99.90 tC/ha
+              - BGC: 9.00 tC/ha  
+              - SOC: 121.25 tC/ha
+              - DeOC: 6.75 tC/ha
+              - SSC: $59699.00 $CAD/ha
+            Total SSC: $564.672800 million CAD
+            
+            Thicket Swamp:
+            Area: 6,794.58 hectares (0.3% of total)
+            Total Carbon: 2,032,938.08 tonnes C (1.0% of total)
+            Carbon Density: 299.20 tC/ha
+            Breakdown per hectare:
+              - AGC: 18.25 tC/ha
+              - BGC: 6.00 tC/ha  
+              - SOC: 274.05 tC/ha
+              - DeOC: 0.90 tC/ha
+              - SSC: $75398.00 $CAD/ha
+            Total SSC: $512.300400 million CAD
+            
+            Forest:
+            Area: 6,020.74 hectares (0.3% of total)
+            Total Carbon: 1,836,626.82 tonnes C (0.9% of total)
+            Carbon Density: 305.05 tC/ha
+            Breakdown per hectare:
+              - AGC: 158.50 tC/ha
+              - BGC: 11.75 tC/ha  
+              - SOC: 122.20 tC/ha
+              - DeOC: 12.60 tC/ha
+              - SSC: $76873.00 $CAD/ha
+            Total SSC: $462.830000 million CAD
+            
+            Transportation:
+            Area: 121,291.92 hectares (5.1% of total)
+            Total Carbon: 1,803,610.84 tonnes C (0.9% of total)
+            Carbon Density: 14.87 tC/ha
+            Breakdown per hectare:
+              - AGC: 0.10 tC/ha
+              - BGC: 0.00 tC/ha  
+              - SOC: 14.77 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $3747.00 $CAD/ha
+            Total SSC: $454.509900 million CAD
+            
+            Coniferous Forest:
+            Area: 5,756.79 hectares (0.2% of total)
+            Total Carbon: 1,686,164.59 tonnes C (0.8% of total)
+            Carbon Density: 292.90 tC/ha
+            Breakdown per hectare:
+              - AGC: 161.20 tC/ha
+              - BGC: 7.50 tC/ha  
+              - SOC: 117.20 tC/ha
+              - DeOC: 7.00 tC/ha
+              - SSC: $73811.00 $CAD/ha
+            Total SSC: $424.913500 million CAD
+            
+            Built Up Area-Pervious:
+            Area: 43,833.16 hectares (1.8% of total)
+            Total Carbon: 651,799.11 tonnes C (0.3% of total)
+            Carbon Density: 14.87 tC/ha
+            Breakdown per hectare:
+              - AGC: 0.10 tC/ha
+              - BGC: 0.00 tC/ha  
+              - SOC: 14.77 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $3747.00 $CAD/ha
+            Total SSC: $164.253400 million CAD
+            
+            Bog:
+            Area: 1,272.41 hectares (0.1% of total)
+            Total Carbon: 417,350.01 tonnes C (0.2% of total)
+            Carbon Density: 328.00 tC/ha
+            Breakdown per hectare:
+              - AGC: 10.00 tC/ha
+              - BGC: 0.00 tC/ha  
+              - SOC: 318.00 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $82656.00 $CAD/ha
+            Total SSC: $105.172200 million CAD
+            
+            Tallgrass Woodland:
+            Area: 1,132.94 hectares (0.0% of total)
+            Total Carbon: 185,665.91 tonnes C (0.1% of total)
+            Carbon Density: 163.88 tC/ha
+            Breakdown per hectare:
+              - AGC: 33.60 tC/ha
+              - BGC: 19.30 tC/ha  
+              - SOC: 109.98 tC/ha
+              - DeOC: 1.00 tC/ha
+              - SSC: $41298.00 $CAD/ha
+            Total SSC: $46.787800 million CAD
+            
+            Tallgrass Savannah:
+            Area: 473.76 hectares (0.0% of total)
+            Total Carbon: 61,565.68 tonnes C (0.0% of total)
+            Carbon Density: 129.95 tC/ha
+            Breakdown per hectare:
+              - AGC: 11.00 tC/ha
+              - BGC: 25.50 tC/ha  
+              - SOC: 91.65 tC/ha
+              - DeOC: 1.80 tC/ha
+              - SSC: $32748.00 $CAD/ha
+            Total SSC: $15.514600 million CAD
+            
+            Open Tallgrass Prairie:
+            Area: 239.90 hectares (0.0% of total)
+            Total Carbon: 17,368.76 tonnes C (0.0% of total)
+            Carbon Density: 72.40 tC/ha
+            Breakdown per hectare:
+              - AGC: 2.70 tC/ha
+              - BGC: 7.60 tC/ha  
+              - SOC: 61.10 tC/ha
+              - DeOC: 1.00 tC/ha
+              - SSC: $18245.00 $CAD/ha
+            Total SSC: $4.376900 million CAD
+            
+            Treed Sand Dune:
+            Area: 248.36 hectares (0.0% of total)
+            Total Carbon: 11,821.87 tonnes C (0.0% of total)
+            Carbon Density: 47.60 tC/ha
+            Breakdown per hectare:
+              - AGC: 22.75 tC/ha
+              - BGC: 14.00 tC/ha  
+              - SOC: 8.75 tC/ha
+              - DeOC: 2.10 tC/ha
+              - SSC: $11995.00 $CAD/ha
+            Total SSC: $2.979100 million CAD
+            
+            Treed Cliff and Talus:
+            Area: 65.01 hectares (0.0% of total)
+            Total Carbon: 3,879.38 tonnes C (0.0% of total)
+            Carbon Density: 59.67 tC/ha
+            Breakdown per hectare:
+              - AGC: 26.37 tC/ha
+              - BGC: 16.28 tC/ha  
+              - SOC: 14.62 tC/ha
+              - DeOC: 2.40 tC/ha
+              - SSC: $15037.00 $CAD/ha
+            Total SSC: $0.977600 million CAD
+            
+            Treed Alvar:
+            Area: 5.73 hectares (0.0% of total)
+            Total Carbon: 341.66 tonnes C (0.0% of total)
+            Carbon Density: 59.67 tC/ha
+            Breakdown per hectare:
+              - AGC: 26.37 tC/ha
+              - BGC: 16.28 tC/ha  
+              - SOC: 14.62 tC/ha
+              - DeOC: 2.40 tC/ha
+              - SSC: $15037.00 $CAD/ha
+            Total SSC: $0.086100 million CAD
+            
+            Shrub Alvar:
+            Area: 7.02 hectares (0.0% of total)
+            Total Carbon: 315.61 tonnes C (0.0% of total)
+            Carbon Density: 44.96 tC/ha
+            Breakdown per hectare:
+              - AGC: 13.49 tC/ha
+              - BGC: 3.87 tC/ha  
+              - SOC: 25.08 tC/ha
+              - DeOC: 2.52 tC/ha
+              - SSC: $11325.00 $CAD/ha
+            Total SSC: $0.079500 million CAD
+            
+            Fen:
+            Area: 0.56 hectares (0.0% of total)
+            Total Carbon: 185.30 tonnes C (0.0% of total)
+            Carbon Density: 328.02 tC/ha
+            Breakdown per hectare:
+              - AGC: 10.00 tC/ha
+              - BGC: 0.00 tC/ha  
+              - SOC: 318.00 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $82669.00 $CAD/ha
+            Total SSC: $0.046700 million CAD
+            
+            Open Cliff and Talus:
+            Area: 6.04 hectares (0.0% of total)
+            Total Carbon: 16.90 tonnes C (0.0% of total)
+            Carbon Density: 2.80 tC/ha
+            Breakdown per hectare:
+              - AGC: 0.10 tC/ha
+              - BGC: 1.90 tC/ha  
+              - SOC: 0.80 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $712.00 $CAD/ha
+            Total SSC: $0.004300 million CAD
+            
+            Extraction-Aggregate:
+            Area: 5,272.16 hectares (0.2% of total)
+            Total Carbon: 0.00 tonnes C (0.0% of total)
+            Carbon Density: 0.00 tC/ha
+            Breakdown per hectare:
+              - AGC: 0.00 tC/ha
+              - BGC: 0.00 tC/ha  
+              - SOC: 0.00 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $0.00 $CAD/ha
+            Total SSC: $0.000000 million CAD
+            
+            Open Sand Dune:
+            Area: 638.41 hectares (0.0% of total)
+            Total Carbon: 0.00 tonnes C (0.0% of total)
+            Carbon Density: 0.00 tC/ha
+            Breakdown per hectare:
+              - AGC: 0.00 tC/ha
+              - BGC: 0.00 tC/ha  
+              - SOC: 0.00 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $0.00 $CAD/ha
+            Total SSC: $0.000000 million CAD
+            
+            Open Beach/Bar:
+            Area: 558.71 hectares (0.0% of total)
+            Total Carbon: 0.00 tonnes C (0.0% of total)
+            Carbon Density: 0.00 tC/ha
+            Breakdown per hectare:
+              - AGC: 0.00 tC/ha
+              - BGC: 0.00 tC/ha  
+              - SOC: 0.00 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $0.00 $CAD/ha
+            Total SSC: $0.000000 million CAD
+            
+            Extraction-Peat/Topsoil:
+            Area: 19.43 hectares (0.0% of total)
+            Total Carbon: 0.00 tonnes C (0.0% of total)
+            Carbon Density: 0.00 tC/ha
+            Breakdown per hectare:
+              - AGC: 0.00 tC/ha
+              - BGC: 0.00 tC/ha  
+              - SOC: 0.00 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $0.00 $CAD/ha
+            Total SSC: $0.000000 million CAD
+            
+            Open Water:
+            Area: 35,572.16 hectares (1.5% of total)
+            Total Carbon: 0.00 tonnes C (0.0% of total)
+            Carbon Density: 0.00 tC/ha
+            Breakdown per hectare:
+              - AGC: 0.00 tC/ha
+              - BGC: 0.00 tC/ha  
+              - SOC: 0.00 tC/ha
+              - DeOC: 0.00 tC/ha
+              - SSC: $0.00 $CAD/ha
+            Total SSC: $0.000000 million CAD
+            
+        ============================================================
+        TOTALS
+        ============================================================
+        Total Area: 2,401,232.94 hectares
+        Total Carbon Sequestration: 200,198,370.36 tonnes C
+        Average Carbon Density: 83.37 tC/ha
+        Total SSC: $50,449.99 million CAD
+        

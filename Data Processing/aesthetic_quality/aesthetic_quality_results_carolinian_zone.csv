@@ -1,0 +1,30 @@
+solris_class,area_hectares,naturalness_score,rarity_score,aesthetic_quality_score
+Treed Cliff and Talus,65.0139,6.0,5,5.67
+Open Cliff and Talus,6.0354,6.0,5,5.67
+Treed Sand Dune,248.3587,5.0,5,5.0
+Bog,1272.4086,5.0,5,5.0
+Fen,0.5649,5.0,5,5.0
+Open Beach/Bar,558.7053,5.0,5,5.0
+Thicket Swamp,6794.5791,5.0,5,5.0
+Open Sand Dune,638.4137,5.0,5,5.0
+Treed Swamp,120021.8555,5.0,4,4.67
+Marsh,25277.4824,5.0,4,4.67
+Open Water,35572.1553,5.0,4,4.67
+Deciduous Forest,151116.5419,5.0,3,4.34
+Mixed Forest,21466.2711,4.0,5,4.33
+Tallgrass Savannah,473.7644,4.0,5,4.33
+Open Tallgrass Prairie,239.9,4.0,5,4.33
+Treed Alvar,5.7258,4.0,5,4.33
+Shrub Alvar,7.0198,4.0,5,4.33
+Coniferous Forest,5756.7927,4.0,5,4.33
+Tallgrass Woodland,1132.9382,4.0,5,4.33
+Forest,6020.7403,4.0,5,4.33
+Built Up Area-Pervious,43833.1616,3.0,4,3.33
+Hedge Rows,14930.9495,2.0,5,2.99
+Plantation - Tree Cultivated,9458.6952,2.0,5,2.99
+Undifferentiated,389065.9426,3.0,2,2.67
+Extraction-Aggregate,5272.1646,1.0,5,2.32
+Extraction-Peat/Topsoil,19.4265,1.0,5,2.32
+Tilled,1249046.1767,2.0,1,1.67
+Built Up Area-Impervious,191639.237,1.0,3,1.66
+Transportation,121291.9194,0.0,3,0.99

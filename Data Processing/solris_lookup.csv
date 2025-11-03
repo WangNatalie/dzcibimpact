@@ -1,0 +1,35 @@
+﻿solris_code,solris_class,biocapacity_category,biocapacity_conversion_factor,lulc_category,agc_tc_ha,bgc_tc_ha,soc_tc_ha,deoc_tc_ha,naturalness,description
+11,Open Beach/Bar,100% Low Biocapacity,0,Sand Bar,0.00,0.00,0.00,0.00,5,Unconsolidated mineral substrates
+21,Open Sand Dune,100% Low Biocapacity,0,Sand Bar,0.00,0.00,0.00,0.00,5,Exposed sands from shoreline processes
+23,Treed Sand Dune,65% Low Biocapacity/35% Forest: Sparse,0.231,65% Sand Bar/35% Open Forest,22.75,14.00,8.75,2.10,5,25-60% tree cover on sand dunes
+41,Open Cliff and Talus,100% Low Biocapacity,0,Barren (exposed),0.10,1.90,0.80,0.00,6,Exposed bedrock >3m height
+43,Treed Cliff and Talus,60% Low Biocapacity/40% Forest: Sparse,0.264,60% Barren/40% Open Forest,26.37,16.28,14.62,2.40,6,25-60% tree cover on cliffs
+52,Shrub Alvar,80% Low Biocapacity/20% Forest: Sparse,0.132,80% Barren/20% Open Forest,13.49,3.87,25.08,2.52,4,Shrub cover on limestone
+53,Treed Alvar,60% Low Biocapacity/40% Forest: Sparse,0.264,60% Barren/40% Open Forest,26.37,16.28,14.62,2.40,4,25-60% tree cover on limestone
+64,Open Bedrock,100% Low Biocapacity,0,Barren_rock,0.10,1.90,0.80,0.00,6,Non-calcareous bedrock <10% cover
+65,Sparse Treed,100% Low Biocapacity,0,Barren ,0.61,0.47,7.70,0.00,4,10-60% tree cover on bedrock
+81,Open Tallgrass Prairie,90% Grassland/10% Forest: Sparse,0.948,Open Tallgrass Prairie,2.70,7.60,61.10,1.00,4,Prairie graminoids ‚<25% tree cover
+82,Tallgrass Savannah,65% Grassand/35% Forest: Sparse,0.231,Tallgrass Savannah,11.00,25.50,91.65,1.80,4,Prairie with 25-35% tree cover
+83,Tallgrass Woodland,55% Grassland/45% Forest: Dense,1.007,Tallgrass Woodland,33.60,19.30,109.98,1.00,4,Prairie with 35-60% tree cover
+90,Forest,100% Forest: Dense,1.04,Mixed Forest_Age 40,158.50,11.75,122.20,12.60,4,Tree cover >60% type undifferentiated
+91,Coniferous Forest,100% Forest: Dense,1.04,Coniferous Forest_Age 40,161.20,7.50,117.20,7.00,4,Tree cover >60% >75% coniferous
+92,Mixed Forest,100% Forest: Dense,1.04,Mixed Forest_Age 40,158.50,11.75,122.20,12.60,4,Tree cover >60% mixed species
+93,Deciduous Forest,100% Forest: Dense,1.04,Deciduous Forest_Age 40,155.80,16.00,127.20,18.20,5,Tree cover >60% >75% deciduous
+131,Treed Swamp,40% Forest: Dense/60% Wetlands: Other,0.474,Mixed Forest Swamp_Age 40,60.96,4.52,309.00,4.85,5,Wetland with >25% tree cover
+135,Thicket Swamp,15% Forest: Sparse/85% Wetlands: Other,0.3965,15% Open Forest/85% Wet Meadow,18.25,6.00,274.05,0.90,5,Wetland with >25% shrub cover
+140,Fen,100% Wetlands: Peat Fens,0.39,Wet Meadow,10.00,0.00,318.00,0.00,5,Minerotrophic peatland - conservation
+150,Bog,100% Wetlands: Peat Bogs,0.61,Wet Meadow,10.00,0.00,318.00,0.00,5,Ombrotrophic peatland - conservation
+160,Marsh,10% Forest: Sparse/90% Wetlands: Other,0.381,10% Open Forest/90% Wet Meadow,15.50,4.00,288.70,0.60,5,Emergent wetland - conservation
+170,Open Water,100% Freshwater,0.8,Water Body,0.00,0.00,0.00,0.00,5,Water depth >2m
+191,Plantation - Tree Cultivated,100% Forest: Dense,1.04,Mixed Forest Plantation_Age 26,99.90,9.00,121.25,6.75,2,Tree cover >60% planted uniform
+192,Hedge Rows,100% Forest: Dense,1.04,Mixed Forest Plantation_Age 26,99.90,9.00,121.25,6.75,2,Linear tree features 10-30m wide
+193,Tilled,100% Cropland,5.6,Cropland,3.62,2.61,34.24,0.50,2,Annual row crops managed fields
+201,Transportation,100% Built-up land,5.6,Developed,0.10,0.00,14.77,0.00,0,Roads and transportation corridors
+202,Built Up Area-Pervious,100% Built-up land,5.6,Built-up,0.10,0.00,14.77,0.00,3,Urban green spaces >80% permeable
+203,Built Up Area-Impervious,100% Built-up land,5.6,Developed,0.10,0.00,14.77,0.00,1,Urban areas <80% permeable
+204,Extraction-Aggregate,100% Extraction,0,Degraded,0.00,0.00,0.00,0.00,1,Pits and quarries
+205,Extraction-Peat/Topsoil,100% Extraction,0,Degraded,0.00,0.00,0.00,0.00,1,Peat extraction sites
+250,Undifferentiated,32% Cropland/20% Grazing land/48% Grassland,2.4584,32% Cropland/20% Pasture/48% Grassland,2.7824,5.1392,52.7808,0.654,3,Agricultural/rural mix not elsewhere classified
+,,,,Open Forest,65.00,40.00,25.00,6.00,,
+,,,,Barren (vegetated),0.61,0.47,0.00,7.70,,
+,,,,Pasture,1.64,3.28,62.48,0.07,,
