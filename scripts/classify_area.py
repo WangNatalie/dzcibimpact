@@ -5,10 +5,12 @@ Uses GDAL to apply SOLRIS land cover classification to a study area.
 Requires a .tif raster layer of SOLRIS 3.0 and a GeoJSON mask layer of the study area.
 
 Steps:
-    1. Clip raster to GeoJSON mask               (gdal.Warp)
-    2. Polygonize clipped raster to multipart     (gdal.Polygonize → GPKG)
-       polygons, field "solris_code"
-    3. Upload GeoPackage to Supabase / PostGIS    (ogr2ogr)
+    1. Clip raster to GeoJSON mask                    (gdal.Warp)
+    2. Polygonize clipped raster to /vsimem/          (gdal.Polygonize, in-memory)
+       with field "solris_code"
+    3. Dissolve by solris_code + compute area_ha      (gdal.VectorTranslate → GPKG)
+       using SQLite ST_Union GROUP BY
+    4. Upload GeoPackage to Supabase / PostGIS        (ogr2ogr)
 
 Requirements:
     pip install gdal python-dotenv
@@ -46,7 +48,7 @@ _OUTPUT_LAYER = "solris_classified"
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Clip, polygonize, and upload a SOLRIS raster."
+        description="Clip, polygonize, dissolve, and upload a SOLRIS raster."
     )
     parser.add_argument(
         "--tif",
@@ -71,7 +73,7 @@ def parse_args():
     return parser.parse_args()
 
 
-# ── Step 1: Clip SOLRIS land classification layer to the study area boundary ────
+# ── Step 1: Clip SOLRIS land classification layer to the study area boundary ─
 
 def step_clip(tif_path: str, geojson_path: str, output_path: str) -> None:
     """Clip the SOLRIS raster layer to the GeoJSON of the study area boundary using gdal.Warp."""
@@ -91,53 +93,87 @@ def step_clip(tif_path: str, geojson_path: str, output_path: str) -> None:
     ds = None
 
 
-# ── Step 2: Convert features into polygons for data analysis ─────────────────
+# ── Steps 2 + 3: Polygonize → dissolve (in-memory, no intermediate file) ─────
 
-def step_polygonize(clipped_tif: str, output_gpkg: str) -> None:
+_VSIMEM_POLYGONIZED = "/vsimem/polygonized.gpkg"
+
+def step_polygonize_and_dissolve(clipped_tif: str, output_gpkg: str) -> None:
     """
-    Convert the raster layer to a vector polygon layer using gdal.Polygonize, 
-    storing the SOLRIS code for each feature in the 'solris_code' field. 
+    1. Polygonize the clipped raster into individual polygons stored in GDAL's
+       virtual memory filesystem (/vsimem/) — no intermediate file on disk.
+    2. Dissolve by solris_code using gdal.VectorTranslate with a SQLite
+       ST_Union GROUP BY query, writing one MultiPolygon + area_ha per class
+       directly to the output GeoPackage (~30 rows for SOLRIS 3.0).
+
+    Requires GDAL built with SpatiaLite support (standard in QGIS distributions).
     """
+    # ── Polygonize to /vsimem/ ────────────────────────────────────────────────
     src_ds = gdal.Open(clipped_tif, gdal.GA_ReadOnly)
     if src_ds is None:
         sys.exit(f"Error: could not open clipped raster: {clipped_tif}")
     src_band = src_ds.GetRasterBand(1)
 
     drv = ogr.GetDriverByName("GPKG")
-    if os.path.exists(output_gpkg):
-        drv.DeleteDataSource(output_gpkg)
-    dst_ds = drv.CreateDataSource(output_gpkg)
+    if gdal.VSIStatL(_VSIMEM_POLYGONIZED):    # clear any previous run
+        gdal.Unlink(_VSIMEM_POLYGONIZED)
+    mem_ds = drv.CreateDataSource(_VSIMEM_POLYGONIZED)
 
     srs = osr.SpatialReference()
     srs.ImportFromWkt(src_ds.GetProjection())
 
-    dst_layer = dst_ds.CreateLayer(
+    mem_layer = mem_ds.CreateLayer(
         _OUTPUT_LAYER,
         srs=srs,
         geom_type=ogr.wkbPolygon,
         options=["GEOMETRY_NAME=geom"],
     )
-    dst_layer.CreateField(ogr.FieldDefn("solris_code", ogr.OFTInteger))
-    field_idx = dst_layer.GetLayerDefn().GetFieldIndex("solris_code")
-
-    mask_band = src_band.GetMaskBand()
+    mem_layer.CreateField(ogr.FieldDefn("solris_code", ogr.OFTInteger))
+    field_idx = mem_layer.GetLayerDefn().GetFieldIndex("solris_code")
 
     err = gdal.Polygonize(
-        src_band, mask_band, dst_layer, field_idx,
+        src_band, src_band.GetMaskBand(), mem_layer, field_idx,
         [], callback=gdal.TermProgress_nocb,
     )
     if err != gdal.CE_None:
         sys.exit("Error: gdal.Polygonize failed.")
 
-    dst_ds.FlushCache()
-    dst_ds = None
+    mem_ds.FlushCache()
+    mem_ds = None
     src_ds = None
 
+    # ── Dissolve in-memory using SQLite ST_Union GROUP BY ─────────────────────
+    if os.path.exists(output_gpkg):
+        ogr.GetDriverByName("GPKG").DeleteDataSource(output_gpkg)
 
-# ── Step 3: Upload to Supabase ────────────────────────────────────────────────
+    result = gdal.VectorTranslate(
+        output_gpkg,
+        _VSIMEM_POLYGONIZED,
+        format="GPKG",
+        SQLStatement=f"""
+            SELECT solris_code,
+                   ST_Union(geom)                AS geom,
+                   SUM(ST_Area(geom)) / 10000.0  AS area_ha
+            FROM   {_OUTPUT_LAYER}
+            WHERE  solris_code IS NOT NULL
+              AND  solris_code != 0
+            GROUP  BY solris_code
+        """,
+        SQLDialect="SQLite",
+        layerName=_OUTPUT_LAYER,
+        geometryType="MULTIPOLYGON",
+    )
+    if result is None:
+        sys.exit("Error: gdal.VectorTranslate (dissolve) failed.")
+    result.FlushCache()
+    result = None
+
+    gdal.Unlink(_VSIMEM_POLYGONIZED)           # free virtual memory
+
+
+# ── Step 4: Upload to Supabase ────────────────────────────────────────────────
 
 def step_upload_to_supabase(gpkg_path: str, table_name: str) -> None:
-    """Upload the land classified data layer as a GeoPackage to Supabase via ogr2ogr."""
+    """Upload the dissolved classified data layer as a GeoPackage to Supabase via ogr2ogr."""
     supabase_url = os.getenv("SUPABASE_URL")
     if not supabase_url:
         print("  Skipping upload: SUPABASE_URL is not set in .env.")
@@ -155,6 +191,7 @@ def step_upload_to_supabase(gpkg_path: str, table_name: str) -> None:
         gpkg_path,
         _OUTPUT_LAYER,
         "-nln", table_name,
+        "-nlt", "MULTIPOLYGON",
         # Let Postgres assign its own FIDs; reusing the source FID causes insert errors
         "-unsetFid",
         "-overwrite",
@@ -189,11 +226,11 @@ def main():
         step_clip(args.tif, args.geojson, clipped_tif)
         print(f"  → {clipped_tif}")
 
-        print("\nStep 2: Polygonize raster → multipart vector (gdal.Polygonize)")
-        step_polygonize(clipped_tif, args.output_gpkg)
+        print("\nSteps 2+3: Polygonize → dissolve by solris_code + area_ha (/vsimem/)")
+        step_polygonize_and_dissolve(clipped_tif, args.output_gpkg)
         print(f"  → {args.output_gpkg}")
 
-    print("\nStep 3: Upload to Supabase")
+    print("\nStep 4: Upload to Supabase")
     step_upload_to_supabase(args.output_gpkg, args.table)
 
     print("\nDone.")

@@ -1,5 +1,0 @@
-pandas 
-sqlalchemy 
-matplotlib
-psycopg2-binary
-openpyxl
