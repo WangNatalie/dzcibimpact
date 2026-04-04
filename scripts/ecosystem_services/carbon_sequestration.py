@@ -9,6 +9,22 @@ _SCC_BASE_YEAR_VALUE = 252  # $/tC in 2021
 
 
 class CarbonSequestrationProcessor:
+    FOLDER_NAME = "carbon_sequestration"
+    CSV_COLS = [
+        "solris_code", "solris_class", "area_hectares",
+        "agc_tc_ha", "bgc_tc_ha", "soc_tc_ha", "deoc_tc_ha",
+        "total_carbon_tc", "ssc", "carbon_pct",
+    ]
+    MERGE_COLS = ["total_carbon_tc", "ssc_million_cad", "carbon_pct"]
+    CHANGE_FIELDS = ["change_carbon_tc", "change_ssc_cad"]
+
+    @staticmethod
+    def compute_change(area_ha: float, old_vals: dict, new_vals: dict) -> dict:
+        change_c = area_ha * (
+            new_vals.get("total_c_per_ha", 0) - old_vals.get("total_c_per_ha", 0)
+        )
+        return {"change_carbon_tc": change_c, "change_ssc_cad": change_c * 252}
+
     def __init__(self, engine):
         self.engine = engine
 
@@ -38,9 +54,10 @@ class CarbonSequestrationProcessor:
 
         # Social cost of carbon using 2021 PV ($252/tC)
         merged["ssc"] = merged["total_carbon_tc"] * _SCC_BASE_YEAR_VALUE
+        merged["ssc_million_cad"] = (merged["ssc"] / 1_000_000).round(4)
 
         total_carbon = merged["total_carbon_tc"].sum()
-        merged["percentage_of_total"] = (
+        merged["carbon_pct"] = (
             merged["total_carbon_tc"] / total_carbon * 100 if total_carbon != 0 else 0
         )
 
@@ -51,7 +68,7 @@ class CarbonSequestrationProcessor:
         cols = [
             "solris_code", "solris_class", "area_hectares",
             "agc_tc_ha", "bgc_tc_ha", "soc_tc_ha", "deoc_tc_ha",
-            "total_carbon_tc", "ssc", "percentage_of_total",
+            "total_carbon_tc", "ssc", "carbon_pct",
         ]
         results_df = results_df.copy()
         results_df["area_hectares"] = results_df["area_hectares"].round(4)
@@ -95,27 +112,26 @@ class CarbonSequestrationProcessor:
             )
         else:
             df = results_df.copy()
-            df["ssc_millions"] = df["ssc"] / 1_000_000
-            df["ssc_density"]  = (df["ssc_millions"] / df["area_hectares"]).replace(
+            df["ssc_density"] = (df["ssc_million_cad"] / df["area_hectares"]).replace(
                 [float("inf"), -float("inf")], 0
             ).fillna(0)
             results_df = (
                 df.groupby("solris_class", as_index=False)
-                .agg(total_area_hectares=("area_hectares",  "sum"),
-                     total_carbon_tc     =("total_carbon_tc","sum"),
-                     avg_agc_tc_ha       =("agc_tc_ha",     "mean"),
-                     avg_bgc_tc_ha       =("bgc_tc_ha",     "mean"),
-                     avg_soc_tc_ha       =("soc_tc_ha",     "mean"),
-                     avg_deoc_tc_ha      =("deoc_tc_ha",    "mean"),
-                     total_ssc           =("ssc_millions",  "sum"),
-                     total_ssc_density   =("ssc_density",   "sum"))
+                .agg(total_area_hectares=("area_hectares",   "sum"),
+                     total_carbon_tc     =("total_carbon_tc", "sum"),
+                     avg_agc_tc_ha       =("agc_tc_ha",      "mean"),
+                     avg_bgc_tc_ha       =("bgc_tc_ha",      "mean"),
+                     avg_soc_tc_ha       =("soc_tc_ha",      "mean"),
+                     avg_deoc_tc_ha      =("deoc_tc_ha",     "mean"),
+                     total_ssc           =("ssc_million_cad", "sum"),
+                     total_ssc_density   =("ssc_density",    "sum"))
                 .sort_values("total_carbon_tc", ascending=False)
             )
 
         total_carbon = results_df["total_carbon_tc"].sum()
         total_area = results_df["total_area_hectares"].sum()
         total_ssc = results_df["total_ssc"].sum()
-        results_df["percentage_of_total"] = results_df["total_carbon_tc"] / total_carbon * 100
+        results_df["carbon_pct"] = results_df["total_carbon_tc"] / total_carbon * 100
 
         report = (
             f"\n        CARBON SEQUESTRATION ANALYSIS REPORT\n"
@@ -130,7 +146,7 @@ class CarbonSequestrationProcessor:
                 f"        Area: {row['total_area_hectares']:,.2f} hectares "
                 f"({row['total_area_hectares']/total_area*100:.1f}% of total)\n"
                 f"        Total Carbon: {row['total_carbon_tc']:,.2f} tonnes C "
-                f"({row['percentage_of_total']:.1f}% of total)\n"
+                f"({row['carbon_pct']:.1f}% of total)\n"
                 f"        Carbon Density: {row['total_carbon_tc']/row['total_area_hectares']:.2f} tC/ha\n"
                 f"        Breakdown per hectare:\n"
                 f"          - AGC:  {row['avg_agc_tc_ha']:.2f} tC/ha\n"
@@ -202,7 +218,7 @@ class CarbonSequestrationProcessor:
             """
             SELECT solris_class, solris_code, area_hectares,
                    agc_tc_ha, bgc_tc_ha, soc_tc_ha, deoc_tc_ha,
-                   total_carbon_tc, ssc, ssc_density, percentage_of_total
+                   total_carbon_tc, ssc, ssc_density, carbon_pct
             FROM carbon_sequestration_results
             ORDER BY total_carbon_tc DESC
             """,

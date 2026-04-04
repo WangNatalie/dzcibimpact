@@ -6,12 +6,9 @@ import argparse
 
 from dotenv import load_dotenv
 from database_setup import setup_database
+from ecosystem_services import discover_processors
 
 load_dotenv()
-from ecosystem_services.biocapacity import BiocapacityProcessor
-from ecosystem_services.carbon_sequestration import CarbonSequestrationProcessor
-from ecosystem_services.water_filtration import WaterFiltrationProcessor
-from ecosystem_services.aesthetic_quality import AestheticQualityProcessor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -160,85 +157,33 @@ def _write_es_outputs(df, proc, study_area, folder, csv_cols, report_label):
 
 def build_combined_results(area_df, engine, study_area):
     """
-    Run all four ecosystem-service processors against area_df, write per-ES
+    Run all ecosystem-service processors against area_df, write per-ES
     CSVs and report .txts to their folders, then merge everything into a single
     combined DataFrame (one row per solris_code) for the final report.
 
-    Combined columns:
-        solris_code, solris_class, area_hectares
-        biocapacity_category, biocapacity_conversion_factor, biocapacity_gha,
-        biocapacity_pct
-        agc_tc_ha, bgc_tc_ha, soc_tc_ha, deoc_tc_ha, total_carbon_tc,
-        ssc_million_cad, carbon_pct
-        wf_value_per_ha, total_wf_value, wf_pct
-        naturalness_score, rarity_score, aesthetic_quality_score
+    Processors are auto-discovered from the ecosystem_services directory — add a
+    new *Processor class there and it will be included automatically.
     """
     combined = area_df[["solris_code", "area_hectares"]].copy()
+    solris_class_df = pd.read_sql(
+        "SELECT solris_code, solris_class FROM solris_lookup", engine
+    )
+    combined = combined.merge(solris_class_df, on="solris_code", how="left")
 
-    # ── Biocapacity ───────────────────────────────────────────────────────────
-    logger.info("Running biocapacity...")
-    bio_proc = BiocapacityProcessor(engine)
-    bio_df   = bio_proc.process(area_df)
-    _write_es_outputs(
-        bio_df, bio_proc, study_area, "biocapacity",
-        csv_cols=["solris_code", "solris_class", "biocapacity_category",
-                  "area_hectares", "biocapacity_gha", "percentage_of_total"],
-        report_label="biocapacity",
-    )
-    bio_cols = (
-        bio_df[["solris_code", "solris_class", "biocapacity_gha", "percentage_of_total"]]
-        .rename(columns={"percentage_of_total": "biocapacity_pct"})
-    )
-    combined = combined.merge(bio_cols, on="solris_code", how="left")
-
-    # ── Carbon sequestration ──────────────────────────────────────────────────
-    logger.info("Running carbon sequestration...")
-    carbon_proc = CarbonSequestrationProcessor(engine)
-    carbon_df   = carbon_proc.process(area_df)
-    _write_es_outputs(
-        carbon_df, carbon_proc, study_area, "carbon_sequestration",
-        csv_cols=["solris_code", "solris_class", "area_hectares",
-                  "agc_tc_ha", "bgc_tc_ha", "soc_tc_ha", "deoc_tc_ha",
-                  "total_carbon_tc", "ssc", "percentage_of_total"],
-        report_label="carbon_sequestration",
-    )
-    carbon_copy = carbon_df.copy()
-    carbon_copy["ssc_million_cad"] = (carbon_copy["ssc"] / 1_000_000).round(4)
-    carbon_cols = (
-        carbon_copy[["solris_code", "solris_class", "total_carbon_tc", "ssc_million_cad", "percentage_of_total"]]
-        .rename(columns={"percentage_of_total": "carbon_pct"})
-    )
-    combined = combined.merge(carbon_cols, on="solris_code", how="left")
-
-    # ── Water filtration ──────────────────────────────────────────────────────
-    logger.info("Running water filtration...")
-    water_proc = WaterFiltrationProcessor(engine)
-    water_df   = water_proc.process(area_df)
-    _write_es_outputs(
-        water_df, water_proc, study_area, "water_filtration",
-        csv_cols=["solris_code", "solris_class", "area_hectares",
-                  "wf_value_per_ha", "total_wf_value", "percentage_of_total"],
-        report_label="water_filtration",
-    )
-    water_cols = (
-        water_df[["solris_code", "wf_value_per_ha", "total_wf_value", "percentage_of_total"]]
-        .rename(columns={"percentage_of_total": "wf_pct"})
-    )
-    combined = combined.merge(water_cols, on="solris_code", how="left")
-
-    # ── Aesthetic quality ─────────────────────────────────────────────────────
-    logger.info("Running aesthetic quality...")
-    aesthetic_proc = AestheticQualityProcessor(engine)
-    aesthetic_df   = aesthetic_proc.process(area_df)
-    _write_es_outputs(
-        aesthetic_df, aesthetic_proc, study_area, "aesthetic_quality",
-        csv_cols=["solris_code", "solris_class", "area_hectares",
-                  "naturalness_score", "rarity_score", "aesthetic_quality_score"],
-        report_label="aesthetic_quality",
-    )
-    aesthetic_cols = aesthetic_df[["solris_code", "naturalness_score",
-                                   "rarity_score", "aesthetic_quality_score"]]
-    combined = combined.merge(aesthetic_cols, on="solris_code", how="left")
+    for ProcessorClass in discover_processors():
+        logger.info(f"Running {ProcessorClass.FOLDER_NAME}...")
+        proc = ProcessorClass(engine)
+        df = proc.process(area_df)
+        _write_es_outputs(
+            df, proc, study_area,
+            ProcessorClass.FOLDER_NAME, ProcessorClass.CSV_COLS,
+            ProcessorClass.FOLDER_NAME,
+        )
+        combined = combined.merge(
+            df[["solris_code"] + ProcessorClass.MERGE_COLS],
+            on="solris_code",
+            how="left",
+        )
 
     return combined
 

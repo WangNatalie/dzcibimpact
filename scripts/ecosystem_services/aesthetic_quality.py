@@ -12,6 +12,22 @@ _RARITY_LABELS = [5, 4, 3, 2, 1]
 
 
 class AestheticQualityProcessor:
+    FOLDER_NAME = "aesthetic_quality"
+    CSV_COLS = [
+        "solris_code", "solris_class", "area_hectares",
+        "naturalness_score", "rarity_score", "aesthetic_quality_score",
+    ]
+    MERGE_COLS = ["naturalness_score", "rarity_score", "aesthetic_quality_score"]
+    CHANGE_FIELDS = ["change_aesthetic_score"]
+
+    @staticmethod
+    def compute_change(area_ha: float, old_vals: dict, new_vals: dict) -> dict:
+        return {
+            "change_aesthetic_score": (
+                new_vals.get("naturalness", 0) - old_vals.get("naturalness", 0)
+            ) * 0.67
+        }
+
     def __init__(self, engine):
         self.engine = engine
 

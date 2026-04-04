@@ -5,6 +5,22 @@ logger = logging.getLogger(__name__)
 
 
 class WaterFiltrationProcessor:
+    FOLDER_NAME = "water_filtration"
+    CSV_COLS = [
+        "solris_code", "solris_class", "area_hectares",
+        "wf_value_per_ha", "total_wf_value", "wf_pct",
+    ]
+    MERGE_COLS = ["wf_value_per_ha", "total_wf_value", "wf_pct"]
+    CHANGE_FIELDS = ["change_wf_value_cad"]
+
+    @staticmethod
+    def compute_change(area_ha: float, old_vals: dict, new_vals: dict) -> dict:
+        return {
+            "change_wf_value_cad": area_ha * (
+                new_vals.get("wf_value_per_ha", 0) - old_vals.get("wf_value_per_ha", 0)
+            )
+        }
+
     def __init__(self, engine):
         self.engine = engine
 
@@ -31,7 +47,7 @@ class WaterFiltrationProcessor:
         merged["total_wf_value"] = (merged["area_hectares"] * merged["wf_value_per_ha"]).round(4)
 
         total_wf = merged["total_wf_value"].sum()
-        merged["percentage_of_total"] = (
+        merged["wf_pct"] = (
             (merged["total_wf_value"] / total_wf * 100).fillna(0) if total_wf != 0 else 0
         )
 
@@ -41,7 +57,7 @@ class WaterFiltrationProcessor:
         """Write water filtration results to the database."""
         cols = [
             "solris_code", "solris_class", "area_hectares",
-            "wf_value_per_ha", "total_wf_value", "percentage_of_total",
+            "wf_value_per_ha", "total_wf_value", "wf_pct",
         ]
         results_df = results_df.copy()
         results_df["area_hectares"] = results_df["area_hectares"].round(4)
@@ -112,7 +128,7 @@ class WaterFiltrationProcessor:
         results_df = pd.read_sql(
             """
             SELECT solris_class, solris_code, area_hectares,
-                   wf_value_per_ha, total_wf_value, percentage_of_total
+                   wf_value_per_ha, total_wf_value, wf_pct
             FROM water_filtration_results
             ORDER BY total_wf_value DESC
             """,

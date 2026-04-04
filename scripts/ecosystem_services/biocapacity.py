@@ -5,6 +5,23 @@ logger = logging.getLogger(__name__)
 
 
 class BiocapacityProcessor:
+    FOLDER_NAME = "biocapacity"
+    CSV_COLS = [
+        "solris_code", "solris_class", "biocapacity_category",
+        "area_hectares", "biocapacity_gha", "biocapacity_pct",
+    ]
+    MERGE_COLS = ["biocapacity_gha", "biocapacity_pct"]
+    CHANGE_FIELDS = ["change_biocapacity_gha"]
+
+    @staticmethod
+    def compute_change(area_ha: float, old_vals: dict, new_vals: dict) -> dict:
+        return {
+            "change_biocapacity_gha": area_ha * (
+                new_vals.get("biocapacity_conversion_factor", 0)
+                - old_vals.get("biocapacity_conversion_factor", 0)
+            )
+        }
+
     def __init__(self, engine):
         self.engine = engine
 
@@ -25,7 +42,7 @@ class BiocapacityProcessor:
         merged["biocapacity_gha"] = merged["area_hectares"] * merged["biocapacity_conversion_factor"]
 
         total_biocapacity = merged["biocapacity_gha"].sum()
-        merged["percentage_of_total"] = merged["biocapacity_gha"] / total_biocapacity * 100
+        merged["biocapacity_pct"] = merged["biocapacity_gha"] / total_biocapacity * 100
 
         return merged
 
@@ -34,7 +51,7 @@ class BiocapacityProcessor:
         cols = [
             "solris_code", "solris_class", "biocapacity_category",
             "area_hectares", "biocapacity_conversion_factor",
-            "biocapacity_gha", "percentage_of_total",
+            "biocapacity_gha", "biocapacity_pct",
         ]
         results_df = results_df.copy()
         results_df["area_hectares"] = results_df["area_hectares"].round(4)
@@ -70,7 +87,7 @@ class BiocapacityProcessor:
 
         total_biocapacity = results_df["total_biocapacity_gha"].sum()
         total_area = results_df["total_area_hectares"].sum()
-        results_df["percentage_of_total"] = results_df["total_biocapacity_gha"] / total_biocapacity * 100
+        results_df["biocapacity_pct"] = results_df["total_biocapacity_gha"] / total_biocapacity * 100
 
         report = (
             f"\n        BIOCAPACITY ANALYSIS REPORT\n"
@@ -85,7 +102,7 @@ class BiocapacityProcessor:
                 f"        Area: {row['total_area_hectares']:,.2f} hectares "
                 f"({row['total_area_hectares']/total_area*100:.1f}% of total)\n"
                 f"        Biocapacity: {row['total_biocapacity_gha']:,.2f} global hectares "
-                f"({row['percentage_of_total']:.1f}% of total)\n\n"
+                f"({row['biocapacity_pct']:.1f}% of total)\n\n"
             )
 
         report += (
@@ -103,7 +120,7 @@ class BiocapacityProcessor:
             """
             SELECT solris_class, solris_code, biocapacity_category,
                    area_hectares, biocapacity_conversion_factor,
-                   biocapacity_gha, percentage_of_total
+                   biocapacity_gha, biocapacity_pct
             FROM biocapacity_results
             ORDER BY biocapacity_gha DESC
             """,
