@@ -40,6 +40,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from osgeo import gdal, ogr, osr
 from ecosystem_services import discover_processors
+from ecosystem_services.aesthetic_quality import landscape_aq
 
 load_dotenv()
 
@@ -150,6 +151,53 @@ def load_es_lookup(solris_csv: str, wf_csv: str) -> dict:
 def es_values(lookup: dict, code: int) -> dict:
     """Return the full ES per-ha value dict for a SOLRIS code; empty dict if not found."""
     return lookup.get(code, {})
+
+
+# ── SOLRIS area composition ───────────────────────────────────────────────────
+
+def compute_solris_areas(solris_tif: str, geojson: str | None = None) -> dict:
+    """Return {solris_code: area_ha} for all SOLRIS classes.
+
+    If geojson is provided, clips to that boundary first.
+    Otherwise reads the entire raster (used for rarity context when no boundary is given).
+    """
+    nodata_val = None
+    if geojson is not None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            clipped = os.path.join(tmpdir, "solris_boundary.tif")
+            opts = gdal.WarpOptions(
+                cutlineDSName=geojson,
+                cropToCutline=True,
+                dstNodata=0,
+                format="GTiff",
+                resampleAlg=gdal.GRA_NearestNeighbour,
+                multithread=True,
+            )
+            ds = gdal.Warp(clipped, solris_tif, options=opts)
+            if ds is None:
+                return {}
+            arr = ds.GetRasterBand(1).ReadAsArray()
+            gt = ds.GetGeoTransform()
+            ds = None
+    else:
+        ds = gdal.Open(solris_tif, gdal.GA_ReadOnly)
+        if ds is None:
+            return {}
+        band = ds.GetRasterBand(1)
+        arr = band.ReadAsArray()
+        gt = ds.GetGeoTransform()
+        nodata_val = band.GetNoDataValue()
+        ds = None
+
+    pixel_area_ha = abs(gt[1] * gt[5]) / 10_000.0
+    areas = {}
+    for code in np.unique(arr):
+        if code == 0:
+            continue
+        if nodata_val is not None and code == int(nodata_val):
+            continue
+        areas[int(code)] = int(np.sum(arr == code)) * pixel_area_ha
+    return areas
 
 
 # ── Step 1b: Clip change raster to GeoJSON ────────────────────────────────────
@@ -308,6 +356,7 @@ def write_impact_gpkg(
     new_code: int,
     lookup: dict,
     srs_wkt: str,
+    context_areas: dict | None = None,
 ) -> None:
     """Iterate polygonized features, compute ES change fields, write to GeoPackage.
 
@@ -348,6 +397,7 @@ def write_impact_gpkg(
 
     out_layer.StartTransaction()
     src_layer.ResetReading()
+    aq_weighted_change = 0.0
 
     for feat in src_layer:
         old_code = feat.GetField("old_solris_code")
@@ -376,8 +426,15 @@ def write_impact_gpkg(
         out_feat.SetField("area_ha", round(area_ha, 6))
 
         for cls in processors:
-            for field_name, value in cls.compute_change(area_ha, old_vals, new_vals).items():
+            for field_name, value in cls.compute_change(
+                area_ha, old_vals, new_vals,
+                context_areas=context_areas,
+                old_code=old_code,
+                new_code=new_code,
+            ).items():
                 out_feat.SetField(field_name, round(value, 6))
+                if field_name == "change_aesthetic_score":
+                    aq_weighted_change += value * area_ha
 
         out_layer.CreateFeature(out_feat)
 
@@ -385,8 +442,7 @@ def write_impact_gpkg(
     out_ds.FlushCache()
     out_ds = None
 
-    feature_count = src_layer.GetFeatureCount()
-    return feature_count
+    return aq_weighted_change
 
 
 # ── Step 5: Upload to Supabase ────────────────────────────────────────────────
@@ -453,6 +509,14 @@ def main():
         )
     print(f"  Loaded {len(lookup)} SOLRIS classes.")
 
+    if args.geojson:
+        print(f"\nComputing SOLRIS composition within boundary: {args.geojson}")
+        context_areas = compute_solris_areas(args.solris_tif, args.geojson)
+    else:
+        print("\nNo boundary provided — using full SOLRIS raster for rarity context...")
+        context_areas = compute_solris_areas(args.solris_tif)
+    print(f"  Found {len(context_areas)} SOLRIS classes.")
+
     with tempfile.TemporaryDirectory() as tmpdir:
         change_tif = args.change_tif
 
@@ -483,7 +547,7 @@ def main():
         print(f"  → {src_count} polygons (before filtering zero/null codes)")
 
     print(f"\nStep 3+4: Computing ES delta fields and writing GeoPackage...")
-    write_impact_gpkg(poly_ds, args.output_gpkg, args.new_solris_code, lookup, srs_wkt)
+    aq_weighted_change = write_impact_gpkg(poly_ds, args.output_gpkg, args.new_solris_code, lookup, srs_wkt, context_areas=context_areas)
     poly_ds = None
 
     # Clean up vsimem
@@ -493,6 +557,15 @@ def main():
         gdal.Unlink(_VSIMEM_POLYGONIZED)
 
     print(f"  → {args.output_gpkg}")
+
+    total_area_ha = sum(context_areas.values())
+    aq_before = landscape_aq(lookup, context_areas)
+    aq_after = aq_before + aq_weighted_change / total_area_ha
+    area_label = "boundary" if args.geojson else "full SOLRIS extent"
+    print(f"\nLandscape aesthetic quality ({area_label}):")
+    print(f"  Before: {aq_before:.3f}")
+    print(f"  After:  {aq_after:.3f}")
+    print(f"  Delta:  {aq_after - aq_before:+.3f}")
 
     print("\nStep 5: Uploading to Supabase...")
     upload_to_supabase(args.output_gpkg, args.table)

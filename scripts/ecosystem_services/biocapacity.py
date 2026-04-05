@@ -14,7 +14,7 @@ class BiocapacityProcessor:
     CHANGE_FIELDS = ["change_biocapacity_gha"]
 
     @staticmethod
-    def compute_change(area_ha: float, old_vals: dict, new_vals: dict) -> dict:
+    def compute_change(area_ha: float, old_vals: dict, new_vals: dict, **kwargs) -> dict:
         return {
             "change_biocapacity_gha": area_ha * (
                 new_vals.get("biocapacity_conversion_factor", 0)
@@ -22,72 +22,38 @@ class BiocapacityProcessor:
             )
         }
 
-    def __init__(self, engine):
-        self.engine = engine
-
-    def process(self, area_df):
-        """Calculate biocapacity per SOLRIS class from a pre-aggregated area DataFrame.
-
-        Args:
-            area_df: DataFrame with columns solris_code (int), area_hectares (float)
-        """
-        lookup_df = pd.read_sql("SELECT * FROM solris_lookup", self.engine)
-        merged = area_df.merge(lookup_df, on="solris_code", how="left")
+    def process(self, area_df, solris_df, wf_df=None):
+        merged = area_df.merge(solris_df, on="solris_code", how="left")
 
         missing_codes = merged[merged["solris_class"].isna()]["solris_code"].unique()
         if len(missing_codes) > 0:
             logger.warning(f"Missing lookup entries for SOLRIS codes: {missing_codes}")
 
-        # Biocapacity (gha) = Area (ha) × Conversion Ratio (gha/ha)
-        merged["biocapacity_gha"] = merged["area_hectares"] * merged["biocapacity_conversion_factor"]
+        merged["biocapacity_gha"] = (
+            merged["area_hectares"] * merged["biocapacity_conversion_factor"]
+        )
 
         total_biocapacity = merged["biocapacity_gha"].sum()
-        merged["biocapacity_pct"] = merged["biocapacity_gha"] / total_biocapacity * 100
+        merged["biocapacity_pct"] = (
+            merged["biocapacity_gha"] / total_biocapacity * 100
+            if total_biocapacity != 0 else 0
+        )
 
         return merged
 
-    def save_to_database(self, results_df):
-        """Write biocapacity results to the database."""
-        cols = [
-            "solris_code", "solris_class", "biocapacity_category",
-            "area_hectares", "biocapacity_conversion_factor",
-            "biocapacity_gha", "biocapacity_pct",
-        ]
-        results_df = results_df.copy()
-        results_df["area_hectares"] = results_df["area_hectares"].round(4)
-        results_df[cols].to_sql("biocapacity_results", self.engine, if_exists="append", index=False)
-        logger.info("Biocapacity results saved to database.")
-
-    def generate_report(self, study_area_name, results_df=None):
-        """Generate a plain-text biocapacity summary report.
-
-        Args:
-            study_area_name: label for the report header
-            results_df: DataFrame from process() — if None, reads from the local DB
-        """
-        if results_df is None:
-            results_df = pd.read_sql(
-                """
-                SELECT solris_class,
-                       SUM(area_hectares)    AS total_area_hectares,
-                       SUM(biocapacity_gha) AS total_biocapacity_gha
-                FROM biocapacity_results
-                GROUP BY solris_class
-                ORDER BY total_biocapacity_gha DESC
-                """,
-                self.engine,
-            )
-        else:
-            results_df = (
-                results_df.groupby("solris_class", as_index=False)
-                .agg(total_area_hectares=("area_hectares", "sum"),
-                     total_biocapacity_gha=("biocapacity_gha", "sum"))
-                .sort_values("total_biocapacity_gha", ascending=False)
-            )
+    def generate_report(self, study_area_name, results_df):
+        results_df = (
+            results_df.groupby("solris_class", as_index=False)
+            .agg(total_area_hectares  =("area_hectares",     "sum"),
+                 total_biocapacity_gha=("biocapacity_gha",   "sum"))
+            .sort_values("total_biocapacity_gha", ascending=False)
+        )
 
         total_biocapacity = results_df["total_biocapacity_gha"].sum()
         total_area = results_df["total_area_hectares"].sum()
-        results_df["biocapacity_pct"] = results_df["total_biocapacity_gha"] / total_biocapacity * 100
+        results_df["biocapacity_pct"] = (
+            results_df["total_biocapacity_gha"] / total_biocapacity * 100
+        )
 
         report = (
             f"\n        BIOCAPACITY ANALYSIS REPORT\n"
@@ -113,21 +79,3 @@ class BiocapacityProcessor:
         )
 
         return report
-
-    def export_to_csv(self, output_path):
-        """Export biocapacity results from the database to a CSV file."""
-        results_df = pd.read_sql(
-            """
-            SELECT solris_class, solris_code, biocapacity_category,
-                   area_hectares, biocapacity_conversion_factor,
-                   biocapacity_gha, biocapacity_pct
-            FROM biocapacity_results
-            ORDER BY biocapacity_gha DESC
-            """,
-            self.engine,
-        )
-        if "solris_code" in results_df.columns:
-            results_df["solris_code"] = results_df["solris_code"].astype("Int64")
-        results_df.to_csv(output_path, index=False)
-        logger.info(f"Biocapacity results exported to CSV: {output_path}")
-        return results_df

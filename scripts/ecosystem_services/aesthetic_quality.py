@@ -1,3 +1,4 @@
+import bisect
 import pandas as pd
 import logging
 
@@ -7,8 +8,43 @@ _NATURALNESS_WEIGHT = 0.67
 _RARITY_WEIGHT = 0.33
 
 # Rarity bins: percentage-of-total area → score (5 = rarest, 1 = most common)
-_RARITY_BINS   = [-float("inf"), 1, 5, 15, 30, float("inf")]
-_RARITY_LABELS = [5, 4, 3, 2, 1]
+_RARITY_BINS        = [-float("inf"), 1, 5, 15, 30, float("inf")]
+_RARITY_LABELS      = [5, 4, 3, 2, 1]
+_RARITY_BREAKPOINTS = [1, 5, 15, 30]
+
+
+def _pct_to_rarity(pct: float) -> int:
+    """Convert a percentage-of-total-area value to a rarity score (5=rarest, 1=most common)."""
+    return _RARITY_LABELS[bisect.bisect_right(_RARITY_BREAKPOINTS, pct)]
+
+
+_no_context_warned = False
+
+
+def _rarity_from_areas(code: int, areas: dict) -> int:
+    """Return the rarity score for a SOLRIS code given a {code: area_ha} landscape dict."""
+    total = sum(v for v in areas.values() if v > 0)
+    if total == 0:
+        return 1
+    return _pct_to_rarity(areas.get(code, 0.0) / total * 100)
+
+
+def landscape_aq(lookup: dict, context_areas: dict) -> float:
+    """Compute the area-weighted average aesthetic quality score for a landscape.
+
+    Args:
+        lookup:        ES lookup dict keyed by solris_code → {naturalness: float, ...}
+        context_areas: {solris_code: area_ha} composition of the landscape
+    """
+    total_area = sum(context_areas.values())
+    if total_area == 0:
+        return 0.0
+    weighted_sum = 0.0
+    for code, area_ha in context_areas.items():
+        naturalness = lookup.get(code, {}).get("naturalness", 0.0)
+        rarity = _rarity_from_areas(code, context_areas)
+        weighted_sum += (naturalness * _NATURALNESS_WEIGHT + rarity * _RARITY_WEIGHT) * area_ha
+    return weighted_sum / total_area
 
 
 class AestheticQualityProcessor:
@@ -21,27 +57,44 @@ class AestheticQualityProcessor:
     CHANGE_FIELDS = ["change_aesthetic_score"]
 
     @staticmethod
-    def compute_change(area_ha: float, old_vals: dict, new_vals: dict) -> dict:
-        return {
-            "change_aesthetic_score": (
-                new_vals.get("naturalness", 0) - old_vals.get("naturalness", 0)
-            ) * 0.67
-        }
+    def compute_change(
+        area_ha: float,
+        old_vals: dict,
+        new_vals: dict,
+        context_areas: dict | None = None,
+        old_code: int | None = None,
+        new_code: int | None = None,
+        **kwargs,
+    ) -> dict:
+        old_nat = old_vals.get("naturalness", 0)
+        new_nat = new_vals.get("naturalness", 0)
 
-    def __init__(self, engine):
-        self.engine = engine
+        if context_areas is not None and old_code is not None and new_code is not None:
+            old_rarity = _rarity_from_areas(old_code, context_areas)
+            # Shift area_ha from old_code to new_code to get new rarity scores
+            adjusted = dict(context_areas)
+            adjusted[old_code] = max(0.0, adjusted.get(old_code, 0.0) - area_ha)
+            adjusted[new_code] = adjusted.get(new_code, 0.0) + area_ha
+            new_rarity = _rarity_from_areas(new_code, adjusted)
+            old_aq = old_nat * _NATURALNESS_WEIGHT + old_rarity * _RARITY_WEIGHT
+            new_aq = new_nat * _NATURALNESS_WEIGHT + new_rarity * _RARITY_WEIGHT
+        else:
+            global _no_context_warned
+            if not _no_context_warned:
+                logger.warning(
+                    "No context_areas provided — rarity component omitted from aesthetic quality change. "
+                    "Pass --boundary-geojson (site_calculator) or --geojson (potential_calculator) for full scoring."
+                )
+                _no_context_warned = True
+            old_aq = old_nat * _NATURALNESS_WEIGHT
+            new_aq = new_nat * _NATURALNESS_WEIGHT
 
-    def process(self, area_df):
-        """Calculate aesthetic quality scores per SOLRIS class from a pre-aggregated area DataFrame.
+        return {"change_aesthetic_score": new_aq - old_aq}
 
-        Args:
-            area_df: DataFrame with columns solris_code (int), area_hectares (float)
-        """
-        lookup_df = pd.read_sql(
-            "SELECT solris_code, solris_class, naturalness FROM solris_lookup", self.engine
+    def process(self, area_df, solris_df, wf_df=None):
+        lookup_df = solris_df[["solris_code", "solris_class", "naturalness"]].rename(
+            columns={"naturalness": "naturalness_score"}
         )
-        lookup_df = lookup_df.rename(columns={"naturalness": "naturalness_score"})
-
         merged = area_df.merge(lookup_df, on="solris_code", how="left")
         merged.dropna(subset=["solris_class"], inplace=True)
 
@@ -63,42 +116,12 @@ class AestheticQualityProcessor:
 
         return merged
 
-    def save_to_database(self, results_df):
-        """Write aesthetic quality results to the database."""
-        cols = [
-            "solris_code", "solris_class", "area_hectares",
-            "naturalness_score", "rarity_score", "aesthetic_quality_score",
-        ]
-        results_df = results_df.copy()
-        results_df["area_hectares"] = results_df["area_hectares"].round(4)
-        results_df[cols].to_sql(
-            "aesthetic_quality_results", self.engine, if_exists="append", index=False
+    def generate_report(self, study_area_name, results_df):
+        results_df = (
+            results_df[["solris_class", "area_hectares",
+                         "naturalness_score", "rarity_score", "aesthetic_quality_score"]]
+            .sort_values("aesthetic_quality_score", ascending=False)
         )
-        logger.info("Aesthetic quality results saved to database.")
-
-    def generate_report(self, study_area_name, results_df=None):
-        """Generate a plain-text aesthetic quality summary report.
-
-        Args:
-            study_area_name: label for the report header
-            results_df: DataFrame from process() — if None, reads from the local DB
-        """
-        if results_df is None:
-            results_df = pd.read_sql(
-                """
-                SELECT solris_class, area_hectares,
-                       naturalness_score, rarity_score, aesthetic_quality_score
-                FROM aesthetic_quality_results
-                ORDER BY aesthetic_quality_score DESC
-                """,
-                self.engine,
-            )
-        else:
-            results_df = (
-                results_df[["solris_class", "area_hectares",
-                             "naturalness_score", "rarity_score", "aesthetic_quality_score"]]
-                .sort_values("aesthetic_quality_score", ascending=False)
-            )
 
         total_area = results_df["area_hectares"].sum()
         weighted_avg = (
@@ -132,20 +155,3 @@ class AestheticQualityProcessor:
         )
 
         return report
-
-    def export_to_csv(self, output_path):
-        """Export aesthetic quality results from the database to a CSV file."""
-        results_df = pd.read_sql(
-            """
-            SELECT solris_class, solris_code, area_hectares,
-                   naturalness_score, rarity_score, aesthetic_quality_score
-            FROM aesthetic_quality_results
-            ORDER BY aesthetic_quality_score DESC
-            """,
-            self.engine,
-        )
-        if "solris_code" in results_df.columns:
-            results_df["solris_code"] = results_df["solris_code"].astype("Int64")
-        results_df.to_csv(output_path, index=False)
-        logger.info(f"Aesthetic quality results exported to CSV: {output_path}")
-        return results_df
