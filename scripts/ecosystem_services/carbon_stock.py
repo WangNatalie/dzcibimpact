@@ -6,8 +6,8 @@ logger = logging.getLogger(__name__)
 _SCC_BASE_YEAR_VALUE = 252  # $/tC in 2021
 
 
-class CarbonSequestrationProcessor:
-    FOLDER_NAME = "carbon_sequestration"
+class CarbonStockProcessor:
+    FOLDER_NAME = "carbon_stock"
     CSV_COLS = [
         "solris_code", "solris_class", "area_hectares",
         "agc_tc_ha", "bgc_tc_ha", "soc_tc_ha", "deoc_tc_ha",
@@ -74,7 +74,7 @@ class CarbonSequestrationProcessor:
         agg["carbon_pct"] = agg["total_carbon_tc"] / total_carbon * 100
 
         report = (
-            f"\n        CARBON SEQUESTRATION ANALYSIS REPORT\n"
+            f"\n        CARBON STOCK ANALYSIS REPORT\n"
             f"        Study Area: {study_area_name}\n"
             f"        Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
             f"        {'='*60}\n        SUMMARY BY SOLRIS CLASS\n        {'='*60}\n\n"
@@ -100,8 +100,10 @@ class CarbonSequestrationProcessor:
         report += (
             f"        {'='*60}\n        TOTALS\n        {'='*60}\n"
             f"        Total Area: {total_area:,.2f} hectares\n"
-            f"        Total Carbon Sequestration: {total_carbon:,.2f} tonnes C\n"
+            f"        Total Carbon Stock: {total_carbon:,.2f} tonnes C\n"
             f"        Average Carbon Density: {total_carbon/total_area:.2f} tC/ha\n"
+        if total_area > 0 else
+        f"        Average Carbon Density: N/A\n"
             f"        Total SSC: ${total_ssc:,.2f} million CAD\n"
         )
 

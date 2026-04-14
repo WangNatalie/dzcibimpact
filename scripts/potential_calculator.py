@@ -32,17 +32,17 @@ Environment variables (.env):
 import os
 import sys
 import argparse
-import subprocess
 import tempfile
 
 import numpy as np
-import pandas as pd
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from osgeo import gdal, ogr, osr
+from gis_helpers import compute_solris_areas, clip_raster_to_geojson
+from database_helpers import supabase_engine, load_es_lookup, upload_gpkg_to_supabase
 from ecosystem_services import discover_processors
 from ecosystem_services.aesthetic_quality import landscape_aq
 
-load_dotenv()
+load_dotenv(find_dotenv())
 
 gdal.UseExceptions()
 ogr.UseExceptions()
@@ -50,9 +50,6 @@ ogr.UseExceptions()
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 _OUTPUT_LAYER = "land_cover_change_impact"
-
-_SOLRIS_LOOKUP_CSV = "data/solris_lookup.csv"
-_WF_LOOKUP_CSV = "data/water_filtration_lookup.csv"
 
 _VSIMEM_MASKED = "/vsimem/masked_solris.tif"
 _VSIMEM_POLYGONIZED = "/vsimem/polygonized.gpkg"
@@ -98,126 +95,9 @@ def parse_args():
     return parser.parse_args()
 
 
-# ── Lookup tables ─────────────────────────────────────────────────────────────
-
-def load_es_lookup(solris_csv: str, wf_csv: str) -> dict:
-    """Build a dict keyed by solris_code → full row of per-ha ES values.
-
-    All columns from solris_lookup.csv are included so that any processor's
-    compute_change() can access whatever column it needs. Additionally:
-      - total_c_per_ha  (agc + bgc + soc + deoc)
-      - wf_value_per_ha (joined from water_filtration_lookup, 0 for non-wetlands)
-    """
-    solris_df = pd.read_csv(solris_csv)
-    solris_df = solris_df.dropna(subset=["solris_code"])
-    solris_df["solris_code"] = solris_df["solris_code"].astype(int)
-
-    for col in ("agc_tc_ha", "bgc_tc_ha", "soc_tc_ha", "deoc_tc_ha"):
-        solris_df[col] = pd.to_numeric(solris_df[col], errors="coerce").fillna(0)
-
-    solris_df["total_c_per_ha"] = (
-        solris_df["agc_tc_ha"]
-        + solris_df["bgc_tc_ha"]
-        + solris_df["soc_tc_ha"]
-        + solris_df["deoc_tc_ha"]
-    )
-
-    # Water filtration lookup: wetland_type (= solris_class) → wf_value_per_ha
-    wf_df = pd.read_csv(wf_csv).rename(
-        columns={"wetland_type": "solris_class", "value": "wf_value_per_ha"}
-    )
-    solris_df = solris_df.merge(wf_df, on="solris_class", how="left")
-    solris_df["wf_value_per_ha"] = solris_df["wf_value_per_ha"].fillna(0)
-
-    def _coerce(val):
-        if pd.isna(val):
-            return 0.0
-        try:
-            return float(val)
-        except (ValueError, TypeError):
-            return val
-
-    lookup = {}
-    for _, row in solris_df.iterrows():
-        code = int(row["solris_code"])
-        lookup[code] = {
-            col: _coerce(row[col])
-            for col in solris_df.columns
-            if col != "solris_code"
-        }
-    return lookup
-
-
 def es_values(lookup: dict, code: int) -> dict:
     """Return the full ES per-ha value dict for a SOLRIS code; empty dict if not found."""
     return lookup.get(code, {})
-
-
-# ── SOLRIS area composition ───────────────────────────────────────────────────
-
-def compute_solris_areas(solris_tif: str, geojson: str | None = None) -> dict:
-    """Return {solris_code: area_ha} for all SOLRIS classes.
-
-    If geojson is provided, clips to that boundary first.
-    Otherwise reads the entire raster (used for rarity context when no boundary is given).
-    """
-    nodata_val = None
-    if geojson is not None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            clipped = os.path.join(tmpdir, "solris_boundary.tif")
-            opts = gdal.WarpOptions(
-                cutlineDSName=geojson,
-                cropToCutline=True,
-                dstNodata=0,
-                format="GTiff",
-                resampleAlg=gdal.GRA_NearestNeighbour,
-                multithread=True,
-            )
-            ds = gdal.Warp(clipped, solris_tif, options=opts)
-            if ds is None:
-                return {}
-            arr = ds.GetRasterBand(1).ReadAsArray()
-            gt = ds.GetGeoTransform()
-            ds = None
-    else:
-        ds = gdal.Open(solris_tif, gdal.GA_ReadOnly)
-        if ds is None:
-            return {}
-        band = ds.GetRasterBand(1)
-        arr = band.ReadAsArray()
-        gt = ds.GetGeoTransform()
-        nodata_val = band.GetNoDataValue()
-        ds = None
-
-    pixel_area_ha = abs(gt[1] * gt[5]) / 10_000.0
-    areas = {}
-    for code in np.unique(arr):
-        if code == 0:
-            continue
-        if nodata_val is not None and code == int(nodata_val):
-            continue
-        areas[int(code)] = int(np.sum(arr == code)) * pixel_area_ha
-    return areas
-
-
-# ── Step 1b: Clip change raster to GeoJSON ────────────────────────────────────
-
-def clip_to_geojson(change_tif: str, geojson: str, output: str) -> None:
-    """Clip the change raster to the GeoJSON boundary using gdal.Warp."""
-    opts = gdal.WarpOptions(
-        cutlineDSName=geojson,
-        cropToCutline=True,
-        dstNodata=255,
-        format="GTiff",
-        creationOptions=["COMPRESS=LZW", "TILED=YES"],
-        multithread=True,
-        warpOptions=["NUM_THREADS=ALL_CPUS"],
-    )
-    ds = gdal.Warp(output, change_tif, options=opts)
-    if ds is None:
-        sys.exit("Error: gdal.Warp (clip) returned None — check inputs.")
-    ds.FlushCache()
-    ds = None
 
 
 # ── Steps 2a + 2b: Warp SOLRIS → mask to change pixels ───────────────────────
@@ -261,7 +141,11 @@ def create_masked_solris(solris_path: str, change_path: str) -> None:
     pixels where change != 0 → SOLRIS value; all others → 0 (NoData).
     """
     solris_ds = gdal.Open(solris_path, gdal.GA_ReadOnly)
+    if solris_ds is None:
+        sys.exit(f"Error: cannot open SOLRIS raster: {solris_path}")
     change_ds = gdal.Open(change_path, gdal.GA_ReadOnly)
+    if change_ds is None:
+        sys.exit(f"Error: cannot open change raster: {change_path}")
 
     solris_arr = solris_ds.GetRasterBand(1).ReadAsArray()
     change_arr = change_ds.GetRasterBand(1).ReadAsArray()
@@ -397,7 +281,7 @@ def write_impact_gpkg(
 
     out_layer.StartTransaction()
     src_layer.ResetReading()
-    aq_weighted_change = 0.0
+    transitions = {}  # {old_code: total area_ha shifted away}
 
     for feat in src_layer:
         old_code = feat.GetField("old_solris_code")
@@ -433,52 +317,15 @@ def write_impact_gpkg(
                 new_code=new_code,
             ).items():
                 out_feat.SetField(field_name, round(value, 6))
-                if field_name == "change_aesthetic_score":
-                    aq_weighted_change += value * area_ha
 
+        transitions[old_code] = transitions.get(old_code, 0.0) + area_ha
         out_layer.CreateFeature(out_feat)
 
     out_layer.CommitTransaction()
     out_ds.FlushCache()
     out_ds = None
 
-    return aq_weighted_change
-
-
-# ── Step 5: Upload to Supabase ────────────────────────────────────────────────
-
-def upload_to_supabase(gpkg_path: str, table_name: str) -> None:
-    """Upload the impact GeoPackage to Supabase via ogr2ogr."""
-    supabase_url = os.getenv("SUPABASE_URL")
-    if not supabase_url:
-        print("  Skipping upload: SUPABASE_URL is not set in .env.")
-        return
-
-    separator = "&" if "?" in supabase_url else "?"
-    pg_conn = f"PG:{supabase_url}{separator}options=-c%20statement_timeout%3D0"
-
-    cmd = [
-        "ogr2ogr",
-        "-f", "PostgreSQL",
-        pg_conn,
-        gpkg_path,
-        _OUTPUT_LAYER,
-        "-nln", f"public.{table_name}",
-        "-nlt", "MULTIPOLYGON",
-        "-lco", "GEOMETRY_NAME=geom",
-        "-lco", "FID=id",
-        "-unsetFid",
-        "-overwrite",
-        "-progress",
-    ]
-
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode == 0:
-        print(f"  Uploaded to Supabase table '{table_name}' successfully.")
-    else:
-        print(f"  ogr2ogr upload failed (exit {result.returncode}):")
-        if result.stderr:
-            print(result.stderr)
+    return transitions
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -493,15 +340,14 @@ def main():
     if args.geojson and not os.path.exists(args.geojson):
         sys.exit(f"Error: GeoJSON not found: {args.geojson}")
 
-    if not os.path.exists(_SOLRIS_LOOKUP_CSV):
-        sys.exit(f"Error: SOLRIS lookup CSV not found: {_SOLRIS_LOOKUP_CSV}")
-    if not os.path.exists(_WF_LOOKUP_CSV):
-        sys.exit(f"Error: water filtration lookup CSV not found: {_WF_LOOKUP_CSV}")
-
     os.makedirs(os.path.dirname(os.path.abspath(args.output_gpkg)), exist_ok=True)
 
-    print("\nLoading ecosystem service lookup tables...")
-    lookup = load_es_lookup(_SOLRIS_LOOKUP_CSV, _WF_LOOKUP_CSV)
+    print("\nLoading ecosystem service lookup tables from Supabase...")
+    engine = supabase_engine()
+    try:
+        lookup = load_es_lookup(engine)
+    finally:
+        engine.dispose()
     if args.new_solris_code not in lookup:
         sys.exit(
             f"Error: new SOLRIS code {args.new_solris_code} not found in lookup. "
@@ -523,7 +369,7 @@ def main():
         if args.geojson:
             print(f"\nStep 1b: Clipping change raster to GeoJSON: {args.geojson}")
             clipped_change = os.path.join(tmpdir, "change_clipped.tif")
-            clip_to_geojson(change_tif, args.geojson, clipped_change)
+            clip_raster_to_geojson(change_tif, args.geojson, clipped_change, nodata=255)
             change_tif = clipped_change
             print(f"  → {clipped_change}")
 
@@ -547,7 +393,7 @@ def main():
         print(f"  → {src_count} polygons (before filtering zero/null codes)")
 
     print(f"\nStep 3+4: Computing ES delta fields and writing GeoPackage...")
-    aq_weighted_change = write_impact_gpkg(poly_ds, args.output_gpkg, args.new_solris_code, lookup, srs_wkt, context_areas=context_areas)
+    transitions = write_impact_gpkg(poly_ds, args.output_gpkg, args.new_solris_code, lookup, srs_wkt, context_areas=context_areas)
     poly_ds = None
 
     # Clean up vsimem
@@ -558,17 +404,23 @@ def main():
 
     print(f"  → {args.output_gpkg}")
 
-    total_area_ha = sum(context_areas.values())
-    aq_before = landscape_aq(lookup, context_areas)
-    aq_after = aq_before + aq_weighted_change / total_area_ha
+    context_areas_after = dict(context_areas)
+    for old_code, area in transitions.items():
+        context_areas_after[old_code] = max(0.0, context_areas_after.get(old_code, 0.0) - area)
+    context_areas_after[args.new_solris_code] = (
+        context_areas_after.get(args.new_solris_code, 0.0) + sum(transitions.values())
+    )
+
     area_label = "boundary" if args.geojson else "full SOLRIS extent"
+    aq_before = landscape_aq(lookup, context_areas)
+    aq_after = landscape_aq(lookup, context_areas_after)
     print(f"\nLandscape aesthetic quality ({area_label}):")
     print(f"  Before: {aq_before:.3f}")
     print(f"  After:  {aq_after:.3f}")
     print(f"  Delta:  {aq_after - aq_before:+.3f}")
 
     print("\nStep 5: Uploading to Supabase...")
-    upload_to_supabase(args.output_gpkg, args.table)
+    upload_gpkg_to_supabase(args.output_gpkg, _OUTPUT_LAYER, args.table, geometry_type="MULTIPOLYGON")
 
     print("\nDone.")
 

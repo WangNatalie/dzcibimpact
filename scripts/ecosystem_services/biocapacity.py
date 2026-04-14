@@ -76,6 +76,8 @@ class BiocapacityProcessor:
             f"        Total Area: {total_area:,.2f} hectares\n"
             f"        Total Biocapacity: {total_biocapacity:,.2f} global hectares\n"
             f"        Biocapacity per Hectare: {total_biocapacity/total_area:.3f} gha/ha\n"
+        if total_area > 0 else
+        f"        Biocapacity per Hectare: N/A\n"
         )
 
         return report

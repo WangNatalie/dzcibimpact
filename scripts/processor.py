@@ -1,26 +1,16 @@
 import os
 import pandas as pd
-from sqlalchemy import create_engine
 import logging
 import argparse
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
+from database_helpers import supabase_engine
 from ecosystem_services import discover_processors
 
-load_dotenv()
+load_dotenv(find_dotenv())
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-# ── Supabase connection ────────────────────────────────────────────────────────
-
-def _supabase_engine():
-    supabase_url = os.getenv("SUPABASE_URL")
-    if not supabase_url:
-        raise RuntimeError("SUPABASE_URL is not set in .env")
-    conn_str = supabase_url.replace("postgres://", "postgresql://", 1)
-    return create_engine(conn_str)
 
 
 # ── Output helpers ─────────────────────────────────────────────────────────────
@@ -91,13 +81,11 @@ def main():
     parser.add_argument("--study-area", default="carolinian_zone")
     args = parser.parse_args()
 
-    engine = _supabase_engine()
+    engine = supabase_engine()
     try:
         logger.info("Loading lookup tables from Supabase...")
         solris_df = pd.read_sql("SELECT * FROM solris_lookup", engine)
-        wf_df = pd.read_sql("SELECT * FROM water_filtration_lookup", engine).rename(
-            columns={"wetland_type": "solris_class", "value": "wf_value_per_ha"}
-        )
+        wf_df = pd.read_sql("SELECT * FROM water_filtration_lookup", engine)
 
         logger.info(f"Loading area data from Supabase table '{args.source_table}'...")
         area_df = pd.read_sql(
@@ -123,7 +111,7 @@ def main():
     output_csv = os.path.join("data", study_area, "ecosystem_services_report.csv")
 
     # ── Upload to Supabase ─────────────────────────────────────────────────────
-    upload_engine = _supabase_engine()
+    upload_engine = supabase_engine()
     try:
         combined.to_sql(table_name, upload_engine, if_exists="replace", index=False)
         logger.info(f"Uploaded {len(combined)} rows to Supabase table '{table_name}'")

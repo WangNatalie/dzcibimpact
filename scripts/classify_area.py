@@ -30,13 +30,14 @@ Environment variables (.env):
 import os
 import sys
 import argparse
-import subprocess
 import tempfile
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from osgeo import gdal, ogr, osr
+from gis_helpers import clip_raster_to_geojson
+from database_helpers import upload_gpkg_to_supabase
 
-load_dotenv()
+load_dotenv(find_dotenv())
 
 gdal.UseExceptions()
 ogr.UseExceptions()
@@ -71,26 +72,6 @@ def parse_args():
         help="Supabase table name  [default: %(default)s]",
     )
     return parser.parse_args()
-
-
-# ── Step 1: Clip SOLRIS land classification layer to the study area boundary ─
-
-def step_clip(tif_path: str, geojson_path: str, output_path: str) -> None:
-    """Clip the SOLRIS raster layer to the GeoJSON of the study area boundary using gdal.Warp."""
-    warp_options = gdal.WarpOptions(
-        cutlineDSName=geojson_path,
-        cropToCutline=True,
-        dstNodata=0,
-        format="GTiff",
-        creationOptions=["COMPRESS=LZW", "TILED=YES"],
-        multithread=True,
-        warpOptions=["NUM_THREADS=ALL_CPUS"],
-    )
-    ds = gdal.Warp(output_path, tif_path, options=warp_options)
-    if ds is None:
-        sys.exit("Error: gdal.Warp (clip) returned None — check inputs.")
-    ds.FlushCache()
-    ds = None
 
 
 # ── Steps 2 + 3: Polygonize → dissolve (in-memory, no intermediate file) ─────
@@ -170,43 +151,6 @@ def step_polygonize_and_dissolve(clipped_tif: str, output_gpkg: str) -> None:
     gdal.Unlink(_VSIMEM_POLYGONIZED)           # free virtual memory
 
 
-# ── Step 4: Upload to Supabase ────────────────────────────────────────────────
-
-def step_upload_to_supabase(gpkg_path: str, table_name: str) -> None:
-    """Upload the dissolved classified data layer as a GeoPackage to Supabase via ogr2ogr."""
-    supabase_url = os.getenv("SUPABASE_URL")
-    if not supabase_url:
-        print("  Skipping upload: SUPABASE_URL is not set in .env.")
-        return
-
-    # Append statement_timeout=0 so the session has no timeout limit.
-    # Supabase's default timeout will cancel large COPY/INSERT operations.
-    separator = "&" if "?" in supabase_url else "?"
-    pg_conn = f"PG:{supabase_url}{separator}options=-c%20statement_timeout%3D0"
-
-    cmd = [
-        "ogr2ogr",
-        "-f", "PostgreSQL",
-        pg_conn,
-        gpkg_path,
-        _OUTPUT_LAYER,
-        "-nln", table_name,
-        "-nlt", "MULTIPOLYGON",
-        # Let Postgres assign its own FIDs; reusing the source FID causes insert errors
-        "-unsetFid",
-        "-overwrite",
-        "-progress",
-    ]
-
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode == 0:
-        print(f"  Uploaded to Supabase table '{table_name}' successfully.")
-    else:
-        print(f"  ogr2ogr upload failed (exit {result.returncode}):")
-        if result.stderr:
-            print(result.stderr)
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -223,7 +167,7 @@ def main():
 
         print("\nStep 1: Clip raster by mask layer (gdal.Warp)")
         clipped_tif = os.path.join(tmpdir, "clipped.tif")
-        step_clip(args.tif, args.geojson, clipped_tif)
+        clip_raster_to_geojson(args.tif, args.geojson, clipped_tif)
         print(f"  → {clipped_tif}")
 
         print("\nSteps 2+3: Polygonize → dissolve by solris_code + area_ha (/vsimem/)")
@@ -231,7 +175,7 @@ def main():
         print(f"  → {args.output_gpkg}")
 
     print("\nStep 4: Upload to Supabase")
-    step_upload_to_supabase(args.output_gpkg, args.table)
+    upload_gpkg_to_supabase(args.output_gpkg, _OUTPUT_LAYER, args.table, geometry_type="MULTIPOLYGON")
 
     print("\nDone.")
 

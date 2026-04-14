@@ -23,10 +23,10 @@ import subprocess
 import sys
 
 import pandas as pd
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from sqlalchemy import create_engine, text
 
-load_dotenv()
+load_dotenv(find_dotenv())
 
 SOLRIS_REQUIRED_COLUMNS = [
     "solris_code", "solris_class", "biocapacity_category",
@@ -40,7 +40,7 @@ WATER_REQUIRED_COLUMNS = ["wetland_type", "value"]
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
-def _supabase_engine():
+def supabase_engine():
     url = os.getenv("SUPABASE_URL")
     if not url:
         sys.exit("Error: SUPABASE_URL is not set in .env")
@@ -55,6 +55,97 @@ def _drop_and_upload(engine, table_name: str, df: pd.DataFrame) -> None:
     df.to_sql(table_name, engine, if_exists="append", index=False)
 
 
+def load_es_lookup(engine) -> dict:
+    """Load and merge ES lookup tables from Supabase into a per-SOLRIS-code dict.
+
+    Returns {solris_code: {column: value}} with two derived fields added:
+      - total_c_per_ha  (agc + bgc + soc + deoc per hectare)
+      - wf_value_per_ha (water filtration value, 0 for non-wetland classes)
+    """
+    solris_df = pd.read_sql("SELECT * FROM solris_lookup", engine)
+    solris_df = solris_df.dropna(subset=["solris_code"])
+    solris_df["solris_code"] = solris_df["solris_code"].astype(int)
+
+    for col in ("agc_tc_ha", "bgc_tc_ha", "soc_tc_ha", "deoc_tc_ha"):
+        solris_df[col] = pd.to_numeric(solris_df[col], errors="coerce").fillna(0)
+
+    solris_df["total_c_per_ha"] = (
+        solris_df["agc_tc_ha"]
+        + solris_df["bgc_tc_ha"]
+        + solris_df["soc_tc_ha"]
+        + solris_df["deoc_tc_ha"]
+    )
+
+    wf_df = pd.read_sql("SELECT * FROM water_filtration_lookup", engine)
+    solris_df = solris_df.merge(wf_df[["solris_class", "wf_value_per_ha"]], on="solris_class", how="left")
+    solris_df["wf_value_per_ha"] = solris_df["wf_value_per_ha"].fillna(0)
+
+    def _coerce(val):
+        if pd.isna(val):
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return val
+
+    return {
+        int(row["solris_code"]): {
+            col: _coerce(row[col])
+            for col in solris_df.columns
+            if col != "solris_code"
+        }
+        for _, row in solris_df.iterrows()
+    }
+
+
+def upload_gpkg_to_supabase(
+    gpkg_path: str,
+    layer_name: str,
+    table_name: str,
+    geometry_type: str | None = None,
+) -> None:
+    """Upload a GeoPackage layer to Supabase via ogr2ogr.
+
+    Args:
+        gpkg_path:     Path to the source GeoPackage.
+        layer_name:    Layer within the GeoPackage to upload.
+        table_name:    Destination Supabase table name (without schema prefix).
+        geometry_type: Optional geometry type override passed to ogr2ogr -nlt
+                       (e.g. "MULTIPOLYGON"). Omit for non-spatial or auto-detected layers.
+    """
+    supabase_url = os.getenv("SUPABASE_URL")
+    if not supabase_url:
+        print("  Skipping upload: SUPABASE_URL is not set in .env.")
+        return
+
+    separator = "&" if "?" in supabase_url else "?"
+    pg_conn = f"PG:{supabase_url}{separator}options=-c%20statement_timeout%3D0"
+
+    cmd = [
+        "ogr2ogr",
+        "-f", "PostgreSQL",
+        pg_conn,
+        gpkg_path,
+        layer_name,
+        "-nln", f"public.{table_name}",
+        "-lco", "GEOMETRY_NAME=geom",
+        "-lco", "FID=id",
+        "-unsetFid",
+        "-overwrite",
+        "-progress",
+    ]
+    if geometry_type:
+        cmd += ["-nlt", geometry_type]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"  Uploaded to Supabase table '{table_name}' successfully.")
+    else:
+        print(f"  ogr2ogr upload failed (exit {result.returncode}):")
+        if result.stderr:
+            print(result.stderr)
+
+
 # ── reindex ────────────────────────────────────────────────────────────────────
 
 def upload_solris_lookup(csv_path: str) -> None:
@@ -63,7 +154,7 @@ def upload_solris_lookup(csv_path: str) -> None:
     if missing:
         sys.exit(f"Error: solris CSV is missing columns: {missing}")
     df = df.dropna(subset=["solris_code"])
-    engine = _supabase_engine()
+    engine = supabase_engine()
     try:
         _drop_and_upload(engine, "solris_lookup", df)
         print(f"  solris_lookup: {len(df)} rows uploaded from '{csv_path}'")
@@ -77,7 +168,7 @@ def upload_water_filtration_lookup(csv_path: str) -> None:
     if missing:
         sys.exit(f"Error: water filtration CSV is missing columns: {missing}")
     df = df.rename(columns={"wetland_type": "solris_class", "value": "wf_value_per_ha"})
-    engine = _supabase_engine()
+    engine = supabase_engine()
     try:
         _drop_and_upload(engine, "water_filtration_lookup", df)
         print(f"  water_filtration_lookup: {len(df)} rows uploaded from '{csv_path}'")

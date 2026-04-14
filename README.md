@@ -16,7 +16,7 @@ postgres://postgres:[password]@[host]:5432/postgres
 
 ### 2. Configure environment variables
 
-Create a `.env` file in `scripts/`:
+Create a `.env` file in the repository root with the **URL of your Supabase database**:
 
 ```
 SUPABASE_URL=postgres://postgres:[password]@[host]:5432/postgres
@@ -27,8 +27,7 @@ SUPABASE_URL=postgres://postgres:[password]@[host]:5432/postgres
 Before running any processing scripts, upload the ecosystem service lookup tables:
 
 ```bash
-cd scripts
-python database_helpers.py reindex
+python scripts/database_helpers.py reindex
 ```
 
 This uploads `data/solris_lookup.csv` and `data/water_filtration_lookup.csv` to Supabase. Re-run any time either CSV is edited.
@@ -50,22 +49,22 @@ Run the scripts in this order:
 
 1. **Classify your study area** — clip SOLRIS to a boundary and upload the land cover summary to Supabase:
    ```bash
-   python classify_area.py --geojson GIS/carolinian_zone.geojson --table carolinian_zone_classified
+   python scripts/classify_area.py --geojson GIS/carolinian_zone.geojson --table carolinian_zone_classified
    ```
 
 2. **Calculate ecosystem service values** — compute ES values for each land cover class in the study area:
    ```bash
-   python processor.py --source-table carolinian_zone_classified --study-area carolinian_zone
+   python scripts/processor.py --source-table carolinian_zone_classified --study-area carolinian_zone
    ```
 
 3. **Calculate potential ES impact of a land cover change** — given a raster marking a change area and a target land cover type, compute per-polygon ES deltas:
    ```bash
-   python potential_calculator.py --change-tif GIS/forest_restoration/Area_of_opportunity.tif --new-solris-code 90 --geojson GIS/carolinian_zone.geojson
+   python scripts/potential_calculator.py --change-tif GIS/forest_restoration/Area_of_opportunity.tif --new-solris-code 90 --geojson GIS/carolinian_zone.geojson
    ```
 
 4. **Calculate ES deltas for project sites** — for each point in a project site layer, compute ES change values from the existing land cover to the restored habitat types:
    ```bash
-   python site_calculator.py --geodatabase GIS/DZCIB_Project_Data.gpkg --boundary-geojson GIS/carolinian_zone.geojson
+   python scripts/site_calculator.py --geodatabase GIS/DZCIB_Project_Data.gpkg --boundary-geojson GIS/carolinian_zone.geojson
    ```
 
 ### 6. Adding a new ecosystem service
@@ -92,7 +91,7 @@ scripts/
 ├── ecosystem_services/
 │   ├── __init__.py                 # Auto-discovery of *Processor classes
 │   ├── biocapacity.py
-│   ├── carbon_sequestration.py
+│   ├── carbon_stock.py
 │   ├── water_filtration.py
 │   └── aesthetic_quality.py
 data/
@@ -151,7 +150,7 @@ python processor.py \
 
 **Local outputs** (written to `data/{study_area}/`):
 - `biocapacity/biocapacity_results.csv` + text report
-- `carbon_sequestration/carbon_sequestration_results.csv` + text report
+- `carbon_stock/carbon_stock_results.csv` + text report
 - `water_filtration/water_filtration_results.csv` + text report
 - `aesthetic_quality/aesthetic_quality_results.csv` + text report
 - `ecosystem_services_report.csv` — combined summary table (aggregated by SOLRIS code)
@@ -241,6 +240,8 @@ python site_calculator.py \
 | `change_aesthetic_score` | Area-weighted average change in aesthetic quality score |
 
 Always prints landscape-level area-weighted aesthetic quality before and after all changes.
+
+> **Modeling assumption:** Due to limitations in project boundary availbility, the existing land cover is sampled from the SOLRIS raster at the point's location and applied as the approximate baseline land class for the entire site. 
 
 ---
 
