@@ -22,7 +22,7 @@ feature. Sites that span multiple SOLRIS classes will have approximate ES deltas
 
 Usage:
     python site_calculator.py \
-        --geodatabase  GIS/DZCIB_Project_Data.gpkg \
+        --geodatabase  GIS/DZCIB_Projects_SOLRIS.gpkg \
         [--layer       project_sites] \
         [--solris-tif  GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif]
 """

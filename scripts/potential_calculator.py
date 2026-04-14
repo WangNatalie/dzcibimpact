@@ -18,7 +18,7 @@ Steps:
 
 Usage:
     python potential_calculator.py \
-        --change-tif  GIS/forest_restoration/Area_of_opportunity.tif \
+        --change-tif  GIS/dataverse_files/Area_of_opportunity.tif \
         --new-solris-code 90 \
         [--solris-tif   GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif] \
         [--geojson      path/to/boundary.geojson] \
@@ -84,8 +84,8 @@ def parse_args():
     )
     parser.add_argument(
         "--output-gpkg",
-        default="GIS/land_cover_change_impact.gpkg",
-        help=f"Output GeoPackage path [default: GIS/land_cover_change_impact.gpkg]",
+        default="GIS/output/land_cover_change_impact.gpkg",
+        help=f"Output GeoPackage path [default: GIS/output/land_cover_change_impact.gpkg]",
     )
     parser.add_argument(
         "--table",

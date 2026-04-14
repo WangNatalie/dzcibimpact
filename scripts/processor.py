@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 # ── Output helpers ─────────────────────────────────────────────────────────────
 
 def _write_es_outputs(df, proc, study_area, folder, csv_cols, report_label):
-    """Write per-ES CSV and report .txt to data/{study_area}/{folder}/."""
-    out_dir = os.path.join("data", study_area, folder)
+    """Write per-ES CSV and report .txt to data/output/{study_area}/{folder}/."""
+    out_dir = os.path.join("data", "output", study_area, folder)
     os.makedirs(out_dir, exist_ok=True)
 
     csv_path    = os.path.join(out_dir, f"{folder}_results.csv")
@@ -108,7 +108,7 @@ def main():
 
     study_area = args.study_area
     table_name = f"ecosystem_services_results_{study_area}"
-    output_csv = os.path.join("data", study_area, "ecosystem_services_report.csv")
+    output_csv = os.path.join("data", "output", study_area, "ecosystem_services_report.csv")
 
     # ── Upload to Supabase ─────────────────────────────────────────────────────
     upload_engine = supabase_engine()

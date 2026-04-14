@@ -63,7 +63,7 @@ def parse_args():
     )
     parser.add_argument(
         "--output-gpkg",
-        default="GIS/carolinian_zone_classified.gpkg",
+        default="GIS/output/carolinian_zone_classified.gpkg",
         help="Save to geopackage path  [default: %(default)s]",
     )
     parser.add_argument(

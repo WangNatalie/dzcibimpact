@@ -34,38 +34,37 @@ This uploads `data/solris_lookup.csv` and `data/water_filtration_lookup.csv` to 
 
 ### 4. Data files
 
-The following GIS data files are present in the `GIS/` directory for testing:
+The following GIS data files are required in the `GIS/` directory:
 
-| File | Description |
-|------|-------------|
-| `GIS/SOLRIS_Version_3_0/` | SOLRIS 3.0 land cover raster (Lambert projection). The foundational input for all processing — each pixel is classified into one of ~30 land cover types. Download from the Ontario Ministry of Natural Resources. |
-| `GIS/carolinian_zone.geojson` | Study area boundary for the Carolinian Zone. Used to clip SOLRIS to the region of interest before computing ecosystem service values. |
-| `GIS/forest_restoration/Area_of_opportunity.tif` | Sample land cover change raster. Non-zero pixels mark areas identified as candidates for forest restoration. Used as input to `potential_calculator.py` to estimate the ecosystem service impact of restoring those areas to forest. |
-| `GIS/DZCIB_Project_Data.gpkg` | Point layer of DZCIB project sites. Each point represents a project location with columns for area (in acres) proposed to be restored to forest, wetland, or tallgrass prairie. Used as input to `site_calculator.py`. |
+
+| File                                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GIS/SOLRIS_Version_3_0/`                     | SOLRIS 3.0 land cover raster (Lambert projection). The foundational input for all processing — each pixel is classified into one of ~30 land cover types. **Download from ArcGIS Online:** [https://www.arcgis.com/home/item.html?id=0279f65b82314121b5b5ec93d76bc6ba](https://www.arcgis.com/home/item.html?id=0279f65b82314121b5b5ec93d76bc6ba)                                                                                     |
+| `GIS/carolinian_zone.geojson`                 | Study area boundary for the Carolinian Zone. Used to clip SOLRIS to the region of interest before computing ecosystem service values.                                                                                                                                                                                                                                                                                                 |
+| `GIS/dataverse_files/Area_of_opportunity.tif` | Land cover change raster. Non-zero pixels mark areas identified as candidates for forest restoration. Used as input to `potential_calculator.py` to estimate the ecosystem service impact of restoring those areas to forest. **Download from Harvard Dataverse:** [https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/5D3SZI](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/5D3SZI) |
+| `GIS/DZCIB_Projects_SOLRIS.gpkg`              | Point layer of DZCIB project sites. Each point represents a project location with columns for area (in acres) proposed to be restored to forest, wetland, or tallgrass prairie. Used as input to `site_calculator.py`.                                                                                                                                                                                                                |
+
 
 ### 5. Workflow
 
 Run the scripts in this order:
 
 1. **Classify your study area** — clip SOLRIS to a boundary and upload the land cover summary to Supabase:
-   ```bash
+  ```bash
    python scripts/classify_area.py --geojson GIS/carolinian_zone.geojson --table carolinian_zone_classified
-   ```
-
+  ```
 2. **Calculate ecosystem service values** — compute ES values for each land cover class in the study area:
-   ```bash
+  ```bash
    python scripts/processor.py --source-table carolinian_zone_classified --study-area carolinian_zone
-   ```
-
+  ```
 3. **Calculate potential ES impact of a land cover change** — given a raster marking a change area and a target land cover type, compute per-polygon ES deltas:
-   ```bash
-   python scripts/potential_calculator.py --change-tif GIS/forest_restoration/Area_of_opportunity.tif --new-solris-code 90 --geojson GIS/carolinian_zone.geojson
-   ```
-
+  ```bash
+   python scripts/potential_calculator.py --change-tif GIS/dataverse_files/Area_of_opportunity.tif --new-solris-code 90 --geojson GIS/carolinian_zone.geojson
+  ```
 4. **Calculate ES deltas for project sites** — for each point in a project site layer, compute ES change values from the existing land cover to the restored habitat types:
-   ```bash
-   python scripts/site_calculator.py --geodatabase GIS/DZCIB_Project_Data.gpkg --boundary-geojson GIS/carolinian_zone.geojson
-   ```
+  ```bash
+   python scripts/site_calculator.py --geodatabase GIS/DZCIB_Projects_SOLRIS.gpkg --boundary-geojson GIS/carolinian_zone.geojson
+  ```
 
 ### 6. Adding a new ecosystem service
 
@@ -97,11 +96,19 @@ scripts/
 data/
 ├── solris_lookup.csv               # Master SOLRIS classification + per-ha ES values
 ├── water_filtration_lookup.csv     # Wetland type → water filtration value ($/ha)
+└── output/                         # CSV and report outputs from processor.py  
+    └── {study_area}/
+        ├── biocapacity/
+        ├── carbon_stock/
+        ├── water_filtration/
+        ├── aesthetic_quality/
+        └── ecosystem_services_report.csv
 GIS/
-├── SOLRIS_Version_3_0/                         # SOLRIS 3.0 raster (Lambert)
-├── carolinian_zone.geojson                     # Study area boundary
-├── forest_restoration/Area_of_opportunity.tif  # Sample land change raster for potential ES calculation
-├── DZCIB_Project_Data.gpkg                     # Sample project site point layer for project ES calculation
+├── SOLRIS_Version_3_0/             # SOLRIS 3.0 raster (Lambert)         [external download]
+├── dataverse_files/                # Harvard Dataverse raster inputs     [external download]
+├── carolinian_zone.geojson         # Study area boundary
+├── DZCIB_Projects_SOLRIS.gpkg      # Project site point layer
+└── output/                         # GeoPackage outputs                  
 ```
 
 ---
@@ -116,16 +123,18 @@ Clips the SOLRIS 3.0 raster to a study area boundary GeoJSON, polygonizes it, di
 python classify_area.py \
     [--tif         GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif] \
     [--geojson     GIS/carolinian_zone.geojson] \
-    [--output-gpkg GIS/carolinian_zone_classified.gpkg] \
+    [--output-gpkg GIS/output/carolinian_zone_classified.gpkg] \
     [--table       carolinian_zone_classified]
 ```
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `--tif` | SOLRIS 3.0 raster | `GIS/SOLRIS_Version_3_0/Solris_Version_3_0_LAMBERT.tif` |
-| `--geojson` | Study area boundary | `GIS/carolinian_zone.geojson` |
-| `--output-gpkg` | Local GeoPackage output | `GIS/carolinian_zone_classified.gpkg` |
-| `--table` | Supabase table name | `carolinian_zone_classified` |
+
+| Argument        | Description             | Default                                                 |
+| --------------- | ----------------------- | ------------------------------------------------------- |
+| `--tif`         | SOLRIS 3.0 raster       | `GIS/SOLRIS_Version_3_0/Solris_Version_3_0_LAMBERT.tif` |
+| `--geojson`     | Study area boundary     | `GIS/carolinian_zone.geojson`                           |
+| `--output-gpkg` | Local GeoPackage output | `GIS/output/carolinian_zone_classified.gpkg`            |
+| `--table`       | Supabase table name     | `carolinian_zone_classified`                            |
+
 
 **Supabase output table:** `{table}` — one row per SOLRIS code with `solris_code`, geometry, and `area_ha`.
 
@@ -141,14 +150,17 @@ python processor.py \
     --study-area   carolinian_zone
 ```
 
-| Argument | Description | Default |
-|----------|-------------|---------|
+
+| Argument         | Description                                                                     | Default                      |
+| ---------------- | ------------------------------------------------------------------------------- | ---------------------------- |
 | `--source-table` | Supabase table with the area-level land summary (created by `classify_area.py`) | `carolinian_zone_classified` |
-| `--study-area` | Name of the study area, used to label output file names and Supabase table name | `carolinian_zone` |
+| `--study-area`   | Name of the study area, used to label output file names and Supabase table name | `carolinian_zone`            |
+
 
 **Supabase output table:** `ecosystem_services_results_{study_area}`
 
-**Local outputs** (written to `data/{study_area}/`):
+**Local outputs** (written to `data/output/{study_area}/`):
+
 - `biocapacity/biocapacity_results.csv` + text report
 - `carbon_stock/carbon_stock_results.csv` + text report
 - `water_filtration/water_filtration_results.csv` + text report
@@ -163,35 +175,39 @@ Intersects a land-cover-change raster with SOLRIS to identify the existing land 
 
 ```bash
 python potential_calculator.py \
-    --change-tif      GIS/forest_restoration/Area_of_opportunity.tif \
+    --change-tif      GIS/dataverse_files/Area_of_opportunity.tif \
     --new-solris-code 90 \
     [--geojson        GIS/carolinian_zone.geojson] \
     [--solris-tif     GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif] \
-    [--output-gpkg    GIS/land_cover_change_impact.gpkg] \
+    [--output-gpkg    GIS/output/land_cover_change_impact.gpkg] \
     [--table          land_cover_change_impact]
 ```
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `--change-tif` | Raster (.tif) where non-zero pixels mark the land change area | required |
-| `--new-solris-code` | Target SOLRIS code after land cover change | required |
-| `--geojson` | Boundary to clip the change raster before processing. If omitted, the full SOLRIS raster extent is used for rarity context. | — |
-| `--solris-tif` | SOLRIS 3.0 raster | `GIS/SOLRIS_Version_3_0/...` |
-| `--output-gpkg` | Output GeoPackage path | `GIS/land_cover_change_impact.gpkg` |
-| `--table` | Supabase table name | `land_cover_change_impact` |
+
+| Argument            | Description                                                                                                                 | Default                                    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `--change-tif`      | Raster (.tif) where non-zero pixels mark the land change area                                                               | required                                   |
+| `--new-solris-code` | Target SOLRIS code after land cover change                                                                                  | required                                   |
+| `--geojson`         | Boundary to clip the change raster before processing. If omitted, the full SOLRIS raster extent is used for rarity context. | —                                          |
+| `--solris-tif`      | SOLRIS 3.0 raster                                                                                                           | `GIS/SOLRIS_Version_3_0/...`               |
+| `--output-gpkg`     | Output GeoPackage path                                                                                                      | `GIS/output/land_cover_change_impact.gpkg` |
+| `--table`           | Supabase table name                                                                                                         | `land_cover_change_impact`                 |
+
 
 **Output GeoPackage fields** (one polygon per contiguous SOLRIS patch in the change area):
 
-| Field | Description |
-|-------|-------------|
-| `old_solris_code` | Existing SOLRIS class |
-| `new_solris_code` | Target SOLRIS class |
-| `area_ha` | Polygon area (ha) |
-| `change_carbon_tc` | Change in carbon stock (tC) |
-| `change_ssc_cad` | Change in social cost of carbon ($ CAD) |
-| `change_biocapacity_gha` | Change in biocapacity (gha) |
-| `change_wf_value_cad` | Change in water filtration value ($ CAD) |
-| `change_aesthetic_score` | Change in aesthetic quality score |
+
+| Field                    | Description                              |
+| ------------------------ | ---------------------------------------- |
+| `old_solris_code`        | Existing SOLRIS class                    |
+| `new_solris_code`        | Target SOLRIS class                      |
+| `area_ha`                | Polygon area (ha)                        |
+| `change_carbon_tc`       | Change in carbon stock (tC)              |
+| `change_ssc_cad`         | Change in social cost of carbon ($ CAD)  |
+| `change_biocapacity_gha` | Change in biocapacity (gha)              |
+| `change_wf_value_cad`    | Change in water filtration value ($ CAD) |
+| `change_aesthetic_score` | Change in aesthetic quality score        |
+
 
 Always prints landscape-level area-weighted aesthetic quality before and after all changes.
 
@@ -203,41 +219,47 @@ For each point feature in an input GeoPackage, samples the SOLRIS raster to assi
 
 Land change columns are read in **acres** and converted to hectares internally. Target SOLRIS codes:
 
-| Column | Target SOLRIS code | Land cover |
-|--------|--------------------|------------|
-| `land_change_forest_acres` | 90 | Mixed forest |
-| `land_change_wetlands_acres` | 160 | Wetland |
-| `land_change_tallgrass_prairie_acres` | 81 | Tallgrass prairie |
+
+| Column                                | Target SOLRIS code | Land cover        |
+| ------------------------------------- | ------------------ | ----------------- |
+| `land_change_forest_acres`            | 90                 | Mixed forest      |
+| `land_change_wetlands_acres`          | 160                | Wetland           |
+| `land_change_tallgrass_prairie_acres` | 81                 | Tallgrass prairie |
+
 
 ES change fields are **aggregated across all habitat types** per site (summed, except aesthetic quality which is area-weighted averaged).
 
 ```bash
 python site_calculator.py \
-    --geodatabase       GIS/DZCIB_Project_Data.gpkg \
+    --geodatabase       GIS/DZCIB_Projects_SOLRIS.gpkg \
     [--boundary-geojson GIS/carolinian_zone.geojson] \
     [--layer            layer_name] \
     [--solris-tif       GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif] \
     [--supabase-table   dzcib_projects_solris]
 ```
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `--geodatabase` | Input/output GeoPackage | required |
-| `--boundary-geojson` | Boundary for landscape SOLRIS composition (rarity context). If omitted, the full SOLRIS raster extent is used. | — |
-| `--layer` | Layer name within the GeoPackage | first layer |
-| `--solris-tif` | SOLRIS 3.0 raster | `GIS/SOLRIS_Version_3_0/...` |
-| `--supabase-table` | Supabase table to upload results to | layer name |
+
+| Argument             | Description                                                                                                    | Default                      |
+| -------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `--geodatabase`      | Input/output GeoPackage                                                                                        | required                     |
+| `--boundary-geojson` | Boundary for landscape SOLRIS composition (rarity context). If omitted, the full SOLRIS raster extent is used. | —                            |
+| `--layer`            | Layer name within the GeoPackage                                                                               | first layer                  |
+| `--solris-tif`       | SOLRIS 3.0 raster                                                                                              | `GIS/SOLRIS_Version_3_0/...` |
+| `--supabase-table`   | Supabase table to upload results to                                                                            | layer name                   |
+
 
 **Added/updated fields per site:**
 
-| Field | Description |
-|-------|-------------|
-| `solris_code` | SOLRIS code sampled at the site point |
-| `change_carbon_tc` | Total change in carbon stock (tC) |
-| `change_ssc_cad` | Total change in social cost of carbon ($ CAD) |
-| `change_biocapacity_gha` | Total change in biocapacity (gha) |
-| `change_wf_value_cad` | Total change in water filtration value ($ CAD) |
+
+| Field                    | Description                                             |
+| ------------------------ | ------------------------------------------------------- |
+| `solris_code`            | SOLRIS code sampled at the site point                   |
+| `change_carbon_tc`       | Total change in carbon stock (tC)                       |
+| `change_ssc_cad`         | Total change in social cost of carbon ($ CAD)           |
+| `change_biocapacity_gha` | Total change in biocapacity (gha)                       |
+| `change_wf_value_cad`    | Total change in water filtration value ($ CAD)          |
 | `change_aesthetic_score` | Area-weighted average change in aesthetic quality score |
+
 
 Always prints landscape-level area-weighted aesthetic quality before and after all changes.
 
@@ -249,7 +271,7 @@ Always prints landscape-level area-weighted aesthetic quality before and after a
 
 Two subcommands for syncing data with Supabase.
 
-**`reindex`** — upload lookup CSVs to Supabase. Run after editing either CSV:
+`**reindex`** — upload lookup CSVs to Supabase. Run after editing either CSV:
 
 ```bash
 python database_helpers.py reindex
@@ -258,7 +280,7 @@ python database_helpers.py reindex \
     --water-csv  data/water_filtration_lookup.csv
 ```
 
-**`export`** — pull a Supabase table to a local GeoPackage:
+`**export**` — pull a Supabase table to a local GeoPackage:
 
 ```bash
 python database_helpers.py export --table dzcib_projects_solris
@@ -285,23 +307,28 @@ New processors placed in this directory are picked up automatically by all three
 
 Master classification table. Each row is one SOLRIS code.
 
-| Column | Description |
-|--------|-------------|
-| `solris_code` | SOLRIS land cover code |
-| `solris_class` | Land cover name |
-| `biocapacity_category` | Biocapacity land use classification |
-| `biocapacity_conversion_factor` | gha/ha conversion factor |
-| `lulc_category` | Simplified land use/land cover category |
-| `agc_tc_ha` | Above-ground carbon (tC/ha) |
-| `bgc_tc_ha` | Below-ground carbon (tC/ha) |
-| `soc_tc_ha` | Soil organic carbon (tC/ha) |
-| `deoc_tc_ha` | Dead organic carbon (tC/ha) |
-| `naturalness` | Naturalness index (0–1 scale, used in aesthetic quality) |
-| `description` | Narrative description |
+
+| Column                          | Description                                              |
+| ------------------------------- | -------------------------------------------------------- |
+| `solris_code`                   | SOLRIS land cover code                                   |
+| `solris_class`                  | Land cover name                                          |
+| `biocapacity_category`          | Biocapacity land use classification                      |
+| `biocapacity_conversion_factor` | gha/ha conversion factor                                 |
+| `lulc_category`                 | Simplified land use/land cover category                  |
+| `agc_tc_ha`                     | Above-ground carbon (tC/ha)                              |
+| `bgc_tc_ha`                     | Below-ground carbon (tC/ha)                              |
+| `soc_tc_ha`                     | Soil organic carbon (tC/ha)                              |
+| `deoc_tc_ha`                    | Dead organic carbon (tC/ha)                              |
+| `naturalness`                   | Naturalness index (0–1 scale, used in aesthetic quality) |
+| `description`                   | Narrative description                                    |
+
 
 ### `data/water_filtration_lookup.csv`
 
-| Column | Description |
-|--------|-------------|
-| `wetland_type` | Matches `solris_class` from SOLRIS lookup |
-| `value` | Per-hectare water filtration benefit ($ CAD) |
+
+| Column         | Description                                  |
+| -------------- | -------------------------------------------- |
+| `wetland_type` | Matches `solris_class` from SOLRIS lookup    |
+| `value`        | Per-hectare water filtration benefit ($ CAD) |
+
+
