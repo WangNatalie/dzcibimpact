@@ -33,10 +33,10 @@ import argparse
 import subprocess
 import tempfile
 
-from dotenv import load_dotenv
 from osgeo import gdal, ogr, osr
+from runtime_support import ensure_parent_dir, load_project_dotenv, resolve_repo_path
 
-load_dotenv()
+load_project_dotenv()
 
 gdal.UseExceptions()
 ogr.UseExceptions()
@@ -52,7 +52,7 @@ def parse_args():
     )
     parser.add_argument(
         "--tif",
-        default="GIS/SOLRIS_Version_3_0/Solris_Version_3_0_LAMBERT.tif",
+        default="GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif",
         help="Input SOLRIS raster layer (.tif)  [default: %(default)s]",
     )
     parser.add_argument(
@@ -211,27 +211,28 @@ def step_upload_to_supabase(gpkg_path: str, table_name: str) -> None:
 
 def main():
     args = parse_args()
+    tif_path = resolve_repo_path(args.tif)
+    geojson_path = resolve_repo_path(args.geojson)
+    output_gpkg = ensure_parent_dir(args.output_gpkg)
 
-    if not os.path.exists(args.tif):
-        sys.exit(f"Error: TIF not found: {args.tif}")
-    if not os.path.exists(args.geojson):
-        sys.exit(f"Error: GeoJSON not found: {args.geojson}")
-
-    os.makedirs(os.path.dirname(os.path.abspath(args.output_gpkg)), exist_ok=True)
+    if not tif_path.exists():
+        sys.exit(f"Error: TIF not found: {tif_path}")
+    if not geojson_path.exists():
+        sys.exit(f"Error: GeoJSON not found: {geojson_path}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
 
         print("\nStep 1: Clip raster by mask layer (gdal.Warp)")
         clipped_tif = os.path.join(tmpdir, "clipped.tif")
-        step_clip(args.tif, args.geojson, clipped_tif)
+        step_clip(str(tif_path), str(geojson_path), clipped_tif)
         print(f"  → {clipped_tif}")
 
         print("\nSteps 2+3: Polygonize → dissolve by solris_code + area_ha (/vsimem/)")
-        step_polygonize_and_dissolve(clipped_tif, args.output_gpkg)
-        print(f"  → {args.output_gpkg}")
+        step_polygonize_and_dissolve(clipped_tif, str(output_gpkg))
+        print(f"  → {output_gpkg}")
 
     print("\nStep 4: Upload to Supabase")
-    step_upload_to_supabase(args.output_gpkg, args.table)
+    step_upload_to_supabase(str(output_gpkg), args.table)
 
     print("\nDone.")
 

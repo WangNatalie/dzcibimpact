@@ -29,6 +29,28 @@ def _rarity_from_areas(code: int, areas: dict) -> int:
     return _pct_to_rarity(areas.get(code, 0.0) / total * 100)
 
 
+def apply_land_cover_change(
+    areas: dict,
+    old_code: int | None,
+    new_code: int | None,
+    area_ha: float,
+) -> dict:
+    adjusted = dict(areas)
+    if old_code is None or new_code is None or area_ha <= 0 or old_code == new_code:
+        return adjusted
+
+    adjusted[old_code] = max(0.0, adjusted.get(old_code, 0.0) - area_ha)
+    adjusted[new_code] = adjusted.get(new_code, 0.0) + area_ha
+    return adjusted
+
+
+def apply_land_cover_changes(context_areas: dict, changes: list[tuple[int, int, float]]) -> dict:
+    adjusted = dict(context_areas)
+    for old_code, new_code, area_ha in changes:
+        adjusted = apply_land_cover_change(adjusted, old_code, new_code, area_ha)
+    return adjusted
+
+
 def landscape_aq(lookup: dict, context_areas: dict) -> float:
     """Compute the area-weighted average aesthetic quality score for a landscape.
 
@@ -71,10 +93,7 @@ class AestheticQualityProcessor:
 
         if context_areas is not None and old_code is not None and new_code is not None:
             old_rarity = _rarity_from_areas(old_code, context_areas)
-            # Shift area_ha from old_code to new_code to get new rarity scores
-            adjusted = dict(context_areas)
-            adjusted[old_code] = max(0.0, adjusted.get(old_code, 0.0) - area_ha)
-            adjusted[new_code] = adjusted.get(new_code, 0.0) + area_ha
+            adjusted = apply_land_cover_change(context_areas, old_code, new_code, area_ha)
             new_rarity = _rarity_from_areas(new_code, adjusted)
             old_aq = old_nat * _NATURALNESS_WEIGHT + old_rarity * _RARITY_WEIGHT
             new_aq = new_nat * _NATURALNESS_WEIGHT + new_rarity * _RARITY_WEIGHT

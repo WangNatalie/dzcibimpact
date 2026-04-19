@@ -23,10 +23,12 @@ import subprocess
 import sys
 
 import pandas as pd
-from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
-load_dotenv()
+from lookup_support import supabase_engine
+from runtime_support import ensure_parent_dir, load_project_dotenv, resolve_repo_path
+
+load_project_dotenv()
 
 SOLRIS_REQUIRED_COLUMNS = [
     "solris_code", "solris_class", "biocapacity_category",
@@ -41,11 +43,10 @@ WATER_REQUIRED_COLUMNS = ["wetland_type", "value"]
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
 def _supabase_engine():
-    url = os.getenv("SUPABASE_URL")
-    if not url:
-        sys.exit("Error: SUPABASE_URL is not set in .env")
-    conn_str = url.replace("postgres://", "postgresql://", 1)
-    return create_engine(conn_str)
+    try:
+        return supabase_engine(required=True)
+    except RuntimeError as exc:
+        sys.exit(f"Error: {exc}")
 
 
 def _drop_and_upload(engine, table_name: str, df: pd.DataFrame) -> None:
@@ -58,6 +59,7 @@ def _drop_and_upload(engine, table_name: str, df: pd.DataFrame) -> None:
 # ── reindex ────────────────────────────────────────────────────────────────────
 
 def upload_solris_lookup(csv_path: str) -> None:
+    csv_path = resolve_repo_path(csv_path)
     df = pd.read_csv(csv_path)
     missing = [c for c in SOLRIS_REQUIRED_COLUMNS if c not in df.columns]
     if missing:
@@ -72,6 +74,7 @@ def upload_solris_lookup(csv_path: str) -> None:
 
 
 def upload_water_filtration_lookup(csv_path: str) -> None:
+    csv_path = resolve_repo_path(csv_path)
     df = pd.read_csv(csv_path)
     missing = [c for c in WATER_REQUIRED_COLUMNS if c not in df.columns]
     if missing:
@@ -99,14 +102,14 @@ def cmd_export(args):
     if not supabase_url:
         sys.exit("Error: SUPABASE_URL is not set in .env")
 
-    output = args.output or f"{args.table}.gpkg"
+    output = ensure_parent_dir(args.output or f"{args.table}.gpkg")
     separator = "&" if "?" in supabase_url else "?"
     pg_conn = f"PG:{supabase_url}{separator}options=-c%20statement_timeout%3D0"
 
     cmd = [
         "ogr2ogr",
         "-f", "GPKG",
-        output,
+        str(output),
         pg_conn,
         args.table,
         "-progress",
