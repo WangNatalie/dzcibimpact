@@ -1,61 +1,39 @@
 #!/usr/bin/env python3
 """
-Site-level Ecosystem Service Change Calculator
+Site-level ecosystem service change calculator.
 
-For each point in an input geodatabase:
-  1. Samples the SOLRIS raster to assign a solris_code field
-  2. For each land change column (forest, wetland, tallgrass prairie),
-     converts acres to hectares and computes per-ES delta values using
-     the same lookup and processor infrastructure as potential_calculator.py
-
-Target SOLRIS codes for each change type:
-  - land_change_forest_acres            → 90
-  - land_change_wetland_acres           → 160
-  - land_change_tallgrass_prairie_acres → 81
-
-Output fields are prefixed by land change type, e.g. forest_change_carbon_tc.
-The geodatabase is modified in-place.
-
-Usage:
-    python site_calculator.py \
-        --geodatabase  GIS/DZCIB_Project_Data.gpkg \
-        [--layer       project_sites] \
-        [--solris-tif  GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif]
+Samples a baseline SOLRIS class for each project feature, computes aggregated
+ecosystem-service deltas for the requested restoration acreage fields, updates
+the GeoPackage in place, and optionally uploads the result to Supabase.
 """
 
-import os
-import sys
 import argparse
+import os
 import subprocess
+import sys
 import tempfile
 
 import numpy as np
-import pandas as pd
-from dotenv import load_dotenv
 from osgeo import gdal, ogr, osr
-from ecosystem_services import discover_processors
-from ecosystem_services.aesthetic_quality import landscape_aq
 
-load_dotenv()
+from ecosystem_services import discover_processors
+from ecosystem_services.aesthetic_quality import apply_land_cover_changes, landscape_aq
+from lookup_support import load_lookup_dict
+from runtime_support import load_project_dotenv, resolve_optional_repo_path, resolve_repo_path
+
+load_project_dotenv()
 
 gdal.UseExceptions()
 ogr.UseExceptions()
 
-# ── Constants ─────────────────────────────────────────────────────────────────
+_ACRES_TO_HA = 0.404686
 
-_SOLRIS_LOOKUP_CSV = "data/solris_lookup.csv"
-_WF_LOOKUP_CSV     = "data/water_filtration_lookup.csv"
-_ACRES_TO_HA       = 0.404686
-
-# (input column, target SOLRIS code)
 LAND_CHANGE_TYPES = [
-    ("land_change_forest_acres",            90),
-    ("land_change_wetlands_acres",          160),
+    ("land_change_forest_acres", 90),
+    ("land_change_wetlands_acres", 160),
     ("land_change_tallgrass_prairie_acres", 81),
 ]
 
-
-# ── CLI ───────────────────────────────────────────────────────────────────────
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -69,18 +47,17 @@ def parse_args():
     parser.add_argument(
         "--layer",
         default=None,
-        help="Layer name within the geodatabase. Defaults to the first layer.",
+        help="Layer name within the GeoPackage. Defaults to the first layer.",
     )
     parser.add_argument(
         "--solris-tif",
         default="GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif",
-        help="SOLRIS 3.0 raster [default: GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif]",
+        help="SOLRIS raster [default: %(default)s]",
     )
     parser.add_argument(
         "--boundary-geojson",
         default=None,
-        help="GeoJSON boundary used to compute landscape-level SOLRIS composition for rarity scoring. "
-             "If omitted, the full SOLRIS raster is used.",
+        help="Optional GeoJSON boundary used for rarity context.",
     )
     parser.add_argument(
         "--supabase-table",
@@ -90,59 +67,12 @@ def parse_args():
     return parser.parse_args()
 
 
-# ── Lookup tables (mirrors potential_calculator.py) ───────────────────────────
-
-def load_es_lookup(solris_csv: str, wf_csv: str) -> dict:
-    solris_df = pd.read_csv(solris_csv)
-    solris_df = solris_df.dropna(subset=["solris_code"])
-    solris_df["solris_code"] = solris_df["solris_code"].astype(int)
-
-    for col in ("agc_tc_ha", "bgc_tc_ha", "soc_tc_ha", "deoc_tc_ha"):
-        solris_df[col] = pd.to_numeric(solris_df[col], errors="coerce").fillna(0)
-
-    solris_df["total_c_per_ha"] = (
-        solris_df["agc_tc_ha"]
-        + solris_df["bgc_tc_ha"]
-        + solris_df["soc_tc_ha"]
-        + solris_df["deoc_tc_ha"]
-    )
-
-    wf_df = pd.read_csv(wf_csv).rename(
-        columns={"wetland_type": "solris_class", "value": "wf_value_per_ha"}
-    )
-    solris_df = solris_df.merge(wf_df, on="solris_class", how="left")
-    solris_df["wf_value_per_ha"] = solris_df["wf_value_per_ha"].fillna(0)
-
-    def _coerce(val):
-        if pd.isna(val):
-            return 0.0
-        try:
-            return float(val)
-        except (ValueError, TypeError):
-            return val
-
-    lookup = {}
-    for _, row in solris_df.iterrows():
-        code = int(row["solris_code"])
-        lookup[code] = {
-            col: _coerce(row[col])
-            for col in solris_df.columns
-            if col != "solris_code"
-        }
-    return lookup
-
-
 def es_values(lookup: dict, code: int) -> dict:
     return lookup.get(code, {})
 
-# ── SOLRIS area composition ───────────────────────────────────────────────────
 
 def compute_solris_areas(solris_tif: str, geojson: str | None = None) -> dict:
-    """Return {solris_code: area_ha} for all SOLRIS classes.
-
-    If geojson is provided, clips to that boundary first.
-    Otherwise reads the entire raster (used for rarity context when no boundary is given).
-    """
+    """Return {solris_code: area_ha} for all SOLRIS classes."""
     nodata_val = None
     if geojson is not None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -182,11 +112,13 @@ def compute_solris_areas(solris_tif: str, geojson: str | None = None) -> dict:
     return areas
 
 
-# ── SOLRIS sampling ───────────────────────────────────────────────────────────
-
-def sample_solris(x: float, y: float, src_srs: osr.SpatialReference,
-                  solris_ds: gdal.Dataset, solris_srs: osr.SpatialReference) -> int | None:
-    """Return the SOLRIS code at (x, y), reprojecting from src_srs if needed."""
+def sample_solris(
+    x: float,
+    y: float,
+    src_srs: osr.SpatialReference,
+    solris_ds: gdal.Dataset,
+    solris_srs: osr.SpatialReference,
+) -> int | None:
     if not src_srs.IsSame(solris_srs):
         transform = osr.CoordinateTransformation(src_srs, solris_srs)
         x, y, _ = transform.TransformPoint(x, y)
@@ -202,14 +134,16 @@ def sample_solris(x: float, y: float, src_srs: osr.SpatialReference,
     return value if value != 0 else None
 
 
-# ── Field helpers ─────────────────────────────────────────────────────────────
-
 def _ensure_field(layer: ogr.Layer, name: str, field_type: int) -> None:
     if layer.GetLayerDefn().GetFieldIndex(name) == -1:
         layer.CreateField(ogr.FieldDefn(name, field_type))
 
 
-# ── Supabase upload ─────────────────────────────────��─────────────────────────
+def _unset_field(feature: ogr.Feature, name: str) -> None:
+    field_idx = feature.GetFieldIndex(name)
+    if field_idx != -1:
+        feature.UnsetField(field_idx)
+
 
 def upload_to_supabase(gpkg_path: str, layer_name: str, table_name: str) -> None:
     supabase_url = os.getenv("SUPABASE_URL")
@@ -222,13 +156,17 @@ def upload_to_supabase(gpkg_path: str, layer_name: str, table_name: str) -> None
 
     cmd = [
         "ogr2ogr",
-        "-f", "PostgreSQL",
+        "-f",
+        "PostgreSQL",
         pg_conn,
         gpkg_path,
         layer_name,
-        "-nln", f"public.{table_name}",
-        "-lco", "GEOMETRY_NAME=geom",
-        "-lco", "FID=id",
+        "-nln",
+        f"public.{table_name}",
+        "-lco",
+        "GEOMETRY_NAME=geom",
+        "-lco",
+        "FID=id",
         "-unsetFid",
         "-overwrite",
         "-progress",
@@ -243,23 +181,22 @@ def upload_to_supabase(gpkg_path: str, layer_name: str, table_name: str) -> None
             print(result.stderr)
 
 
-# ── Main ──────────────────────────────────────���───────────────────────────────
-
 def main():
     args = parse_args()
+    geodatabase = resolve_repo_path(args.geodatabase)
+    solris_tif = resolve_repo_path(args.solris_tif)
+    boundary_geojson = resolve_optional_repo_path(args.boundary_geojson)
 
-    if not os.path.exists(args.geodatabase):
-        sys.exit(f"Error: geodatabase not found: {args.geodatabase}")
-    if not os.path.exists(args.solris_tif):
-        sys.exit(f"Error: SOLRIS TIF not found: {args.solris_tif}")
-    if not os.path.exists(_SOLRIS_LOOKUP_CSV):
-        sys.exit(f"Error: SOLRIS lookup CSV not found: {_SOLRIS_LOOKUP_CSV}")
-    if not os.path.exists(_WF_LOOKUP_CSV):
-        sys.exit(f"Error: water filtration lookup CSV not found: {_WF_LOOKUP_CSV}")
+    if not geodatabase.exists():
+        sys.exit(f"Error: geodatabase not found: {geodatabase}")
+    if not solris_tif.exists():
+        sys.exit(f"Error: SOLRIS TIF not found: {solris_tif}")
+    if boundary_geojson and not boundary_geojson.exists():
+        sys.exit(f"Error: boundary GeoJSON not found: {boundary_geojson}")
 
     print("Loading ecosystem service lookup tables...")
-    lookup = load_es_lookup(_SOLRIS_LOOKUP_CSV, _WF_LOOKUP_CSV)
-    print(f"  Loaded {len(lookup)} SOLRIS classes.")
+    lookup, lookup_source = load_lookup_dict(prefer_supabase=True, require_supabase=False)
+    print(f"  Loaded {len(lookup)} SOLRIS classes from {lookup_source}.")
 
     for _, new_code in LAND_CHANGE_TYPES:
         if new_code not in lookup:
@@ -269,35 +206,37 @@ def main():
             )
 
     processors = discover_processors()
+    output_fields = []
+    for cls in processors:
+        for field_name in cls.CHANGE_FIELDS:
+            if field_name not in output_fields:
+                output_fields.append(field_name)
 
-    if args.boundary_geojson:
-        if not os.path.exists(args.boundary_geojson):
-            sys.exit(f"Error: boundary GeoJSON not found: {args.boundary_geojson}")
-        print(f"\nComputing SOLRIS composition within boundary: {args.boundary_geojson}")
-        context_areas = compute_solris_areas(args.solris_tif, args.boundary_geojson)
+    if boundary_geojson:
+        print(f"\nComputing SOLRIS composition within boundary: {boundary_geojson}")
+        context_areas = compute_solris_areas(str(solris_tif), str(boundary_geojson))
     else:
-        print("\nNo boundary provided — using full SOLRIS raster for rarity context...")
-        context_areas = compute_solris_areas(args.solris_tif)
+        print("\nNo boundary provided - using full SOLRIS raster for rarity context...")
+        context_areas = compute_solris_areas(str(solris_tif))
     print(f"  Found {len(context_areas)} SOLRIS classes.")
 
-    # Pre-fetch new_vals for each land change type
     change_configs = [
         (col, new_code, es_values(lookup, new_code))
         for col, new_code in LAND_CHANGE_TYPES
     ]
 
     print("Opening SOLRIS raster...")
-    solris_ds = gdal.Open(args.solris_tif, gdal.GA_ReadOnly)
+    solris_ds = gdal.Open(str(solris_tif), gdal.GA_ReadOnly)
     if solris_ds is None:
-        sys.exit(f"Error: cannot open SOLRIS TIF: {args.solris_tif}")
+        sys.exit(f"Error: cannot open SOLRIS TIF: {solris_tif}")
     solris_srs = osr.SpatialReference()
     solris_srs.ImportFromWkt(solris_ds.GetProjection())
     solris_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
 
-    print(f"Opening geodatabase: {args.geodatabase}")
-    gdb_ds = ogr.Open(args.geodatabase, 1)  # 1 = update
+    print(f"Opening geodatabase: {geodatabase}")
+    gdb_ds = ogr.Open(str(geodatabase), 1)
     if gdb_ds is None:
-        sys.exit(f"Error: cannot open geodatabase: {args.geodatabase}")
+        sys.exit(f"Error: cannot open geodatabase: {geodatabase}")
 
     layer = gdb_ds.GetLayerByName(args.layer) if args.layer else gdb_ds.GetLayer(0)
     if layer is None:
@@ -309,25 +248,28 @@ def main():
         sys.exit("Error: point layer has no spatial reference defined.")
     layer_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
 
-    # Add output fields
     _ensure_field(layer, "solris_code", ogr.OFTInteger)
-    for cls in processors:
-        for field_name in cls.CHANGE_FIELDS:
-            _ensure_field(layer, field_name, ogr.OFTReal)
+    for field_name in output_fields:
+        _ensure_field(layer, field_name, ogr.OFTReal)
 
-    # Process features
     layer.ResetReading()
     updated = 0
-    skipped = 0
-    aq_landscape_change = 0.0
+    skipped_no_geometry = 0
+    skipped_unsampled = 0
+    transitions = []
 
     for feat in layer:
+        _unset_field(feat, "solris_code")
+        for field_name in output_fields:
+            _unset_field(feat, field_name)
+
         geom = feat.GetGeometryRef()
         if geom is None:
-            skipped += 1
+            layer.SetFeature(feat)
+            skipped_no_geometry += 1
             continue
 
-        geom_type = geom.GetGeometryType() & ~0x80000000  # strip Z/M flags
+        geom_type = geom.GetGeometryType() & ~0x80000000
         if geom_type == ogr.wkbPoint:
             x, y = geom.GetX(), geom.GetY()
         else:
@@ -335,10 +277,14 @@ def main():
             x, y = centroid.GetX(), centroid.GetY()
 
         solris_code = sample_solris(x, y, layer_srs, solris_ds, solris_srs)
-        if solris_code is not None:
-            feat.SetField("solris_code", solris_code)
+        if solris_code is None:
+            layer.SetFeature(feat)
+            skipped_unsampled += 1
+            updated += 1
+            continue
 
-        old_vals = es_values(lookup, solris_code) if solris_code else {}
+        feat.SetField("solris_code", solris_code)
+        old_vals = es_values(lookup, solris_code)
 
         totals = {}
         aq_weighted_sum = 0.0
@@ -348,10 +294,17 @@ def main():
             raw = feat.GetField(col)
             if raw is None:
                 continue
+
             area_ha = float(raw) * _ACRES_TO_HA
+            if area_ha <= 0:
+                continue
+
+            transitions.append((solris_code, new_code_val, area_ha))
             for cls in processors:
                 for field_name, value in cls.compute_change(
-                    area_ha, old_vals, new_vals,
+                    area_ha,
+                    old_vals,
+                    new_vals,
                     context_areas=context_areas,
                     old_code=solris_code,
                     new_code=new_code_val,
@@ -364,7 +317,6 @@ def main():
 
         if aq_total_area > 0:
             totals["change_aesthetic_score"] = aq_weighted_sum / aq_total_area
-            aq_landscape_change += aq_weighted_sum  # Σ(aq_change_i × area_ha_i) across all sites
 
         for field_name, value in totals.items():
             feat.SetField(field_name, round(value, 6))
@@ -377,12 +329,14 @@ def main():
     gdb_ds = None
     solris_ds = None
 
-    print(f"\nDone. Updated {updated} features, skipped {skipped} (no geometry).")
+    print(
+        f"\nDone. Updated {updated} features, skipped {skipped_no_geometry} with no geometry, "
+        f"and left {skipped_unsampled} unsampled features blank."
+    )
 
-    total_area_ha = sum(context_areas.values())
     aq_before = landscape_aq(lookup, context_areas)
-    aq_after = aq_before + aq_landscape_change / total_area_ha
-    area_label = args.boundary_geojson or "full SOLRIS extent"
+    aq_after = landscape_aq(lookup, apply_land_cover_changes(context_areas, transitions))
+    area_label = str(boundary_geojson) if boundary_geojson else "full SOLRIS extent"
     print(f"\nLandscape aesthetic quality ({area_label}):")
     print(f"  Before: {aq_before:.3f}")
     print(f"  After:  {aq_after:.3f}")
@@ -390,7 +344,7 @@ def main():
 
     table_name = args.supabase_table or layer_name
     print(f"\nUploading to Supabase table '{table_name}'...")
-    upload_to_supabase(args.geodatabase, layer_name, table_name)
+    upload_to_supabase(str(geodatabase), layer_name, table_name)
 
 
 if __name__ == "__main__":

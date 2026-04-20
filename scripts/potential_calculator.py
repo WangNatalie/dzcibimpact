@@ -1,64 +1,40 @@
 #!/usr/bin/env python3
 """
-Land Cover Change Impact Analysis Pipeline
+Land cover change impact analysis pipeline.
 
-Intersects a land-cover-change raster with the SOLRIS 3.0 land cover raster,
-polygonizes the result, and computes per-feature ecosystem service deltas
-between the existing (old) SOLRIS class and a user-specified new SOLRIS class.
-Outputs a GeoPackage and optionally uploads it to Supabase.
-
-Steps:
-    1.  (Optional) Clip the change raster to a GeoJSON boundary
-    2a. Warp SOLRIS to match the change raster CRS / resolution / extent
-    2b. Mask SOLRIS to pixels where the change raster is non-zero
-    2c. Polygonize the masked raster  →  field "old_solris_code"
-    3.  Compute area_ha + ecosystem-service delta fields per feature
-    4.  Write to GeoPackage
-    5.  Upload to Supabase via ogr2ogr
-
-Usage:
-    python potential_calculator.py \
-        --change-tif  GIS/forest_restoration/Area_of_opportunity.tif \
-        --new-solris-code 90 \
-        [--solris-tif   GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif] \
-        [--geojson      path/to/boundary.geojson] \
-        [--output-gpkg  GIS/land_cover_change_impact.gpkg] \
-        [--table        land_cover_change_impact]
-
-Environment variables (.env):
-    SUPABASE_URL   PostgreSQL connection string
+Intersects a land-cover-change raster with the SOLRIS raster, polygonizes the
+affected area, computes per-feature ecosystem-service deltas, writes a
+GeoPackage, and optionally uploads it to Supabase.
 """
 
-import os
-import sys
 import argparse
+import os
 import subprocess
+import sys
 import tempfile
 
 import numpy as np
-import pandas as pd
-from dotenv import load_dotenv
 from osgeo import gdal, ogr, osr
-from ecosystem_services import discover_processors
-from ecosystem_services.aesthetic_quality import landscape_aq
 
-load_dotenv()
+from ecosystem_services import discover_processors
+from ecosystem_services.aesthetic_quality import apply_land_cover_changes, landscape_aq
+from lookup_support import load_lookup_dict
+from runtime_support import (
+    ensure_parent_dir,
+    load_project_dotenv,
+    resolve_optional_repo_path,
+    resolve_repo_path,
+)
+
+load_project_dotenv()
 
 gdal.UseExceptions()
 ogr.UseExceptions()
 
-# ── Constants ─────────────────────────────────────────────────────────────────
-
 _OUTPUT_LAYER = "land_cover_change_impact"
-
-_SOLRIS_LOOKUP_CSV = "data/solris_lookup.csv"
-_WF_LOOKUP_CSV = "data/water_filtration_lookup.csv"
-
 _VSIMEM_MASKED = "/vsimem/masked_solris.tif"
 _VSIMEM_POLYGONIZED = "/vsimem/polygonized.gpkg"
 
-
-# ── CLI ───────────────────────────────────────────────────────────────────────
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -73,94 +49,37 @@ def parse_args():
         "--new-solris-code",
         required=True,
         type=int,
-        help="SOLRIS code representing the new (target) land cover class.",
+        help="SOLRIS code representing the new land cover class.",
     )
     parser.add_argument(
         "--solris-tif",
         default="GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif",
-        help=f"SOLRIS 3.0 raster [default: GIS/SOLRIS_Version_3_0/SOLRIS_Version_3_0_LAMBERT.tif]",
+        help="SOLRIS raster [default: %(default)s]",
     )
     parser.add_argument(
         "--geojson",
         default=None,
-        help="Optional GeoJSON to clip the change raster before processing.",
+        help="Optional GeoJSON boundary used to clip the change raster.",
     )
     parser.add_argument(
         "--output-gpkg",
         default="GIS/land_cover_change_impact.gpkg",
-        help=f"Output GeoPackage path [default: GIS/land_cover_change_impact.gpkg]",
+        help="Output GeoPackage path [default: %(default)s]",
     )
     parser.add_argument(
         "--table",
         default="land_cover_change_impact",
-        help=f"Supabase table name [default: land_cover_change_impact]",
+        help="Supabase table name [default: %(default)s]",
     )
     return parser.parse_args()
 
 
-# ── Lookup tables ─────────────────────────────────────────────────────────────
-
-def load_es_lookup(solris_csv: str, wf_csv: str) -> dict:
-    """Build a dict keyed by solris_code → full row of per-ha ES values.
-
-    All columns from solris_lookup.csv are included so that any processor's
-    compute_change() can access whatever column it needs. Additionally:
-      - total_c_per_ha  (agc + bgc + soc + deoc)
-      - wf_value_per_ha (joined from water_filtration_lookup, 0 for non-wetlands)
-    """
-    solris_df = pd.read_csv(solris_csv)
-    solris_df = solris_df.dropna(subset=["solris_code"])
-    solris_df["solris_code"] = solris_df["solris_code"].astype(int)
-
-    for col in ("agc_tc_ha", "bgc_tc_ha", "soc_tc_ha", "deoc_tc_ha"):
-        solris_df[col] = pd.to_numeric(solris_df[col], errors="coerce").fillna(0)
-
-    solris_df["total_c_per_ha"] = (
-        solris_df["agc_tc_ha"]
-        + solris_df["bgc_tc_ha"]
-        + solris_df["soc_tc_ha"]
-        + solris_df["deoc_tc_ha"]
-    )
-
-    # Water filtration lookup: wetland_type (= solris_class) → wf_value_per_ha
-    wf_df = pd.read_csv(wf_csv).rename(
-        columns={"wetland_type": "solris_class", "value": "wf_value_per_ha"}
-    )
-    solris_df = solris_df.merge(wf_df, on="solris_class", how="left")
-    solris_df["wf_value_per_ha"] = solris_df["wf_value_per_ha"].fillna(0)
-
-    def _coerce(val):
-        if pd.isna(val):
-            return 0.0
-        try:
-            return float(val)
-        except (ValueError, TypeError):
-            return val
-
-    lookup = {}
-    for _, row in solris_df.iterrows():
-        code = int(row["solris_code"])
-        lookup[code] = {
-            col: _coerce(row[col])
-            for col in solris_df.columns
-            if col != "solris_code"
-        }
-    return lookup
-
-
 def es_values(lookup: dict, code: int) -> dict:
-    """Return the full ES per-ha value dict for a SOLRIS code; empty dict if not found."""
     return lookup.get(code, {})
 
 
-# ── SOLRIS area composition ───────────────────────────────────────────────────
-
 def compute_solris_areas(solris_tif: str, geojson: str | None = None) -> dict:
-    """Return {solris_code: area_ha} for all SOLRIS classes.
-
-    If geojson is provided, clips to that boundary first.
-    Otherwise reads the entire raster (used for rarity context when no boundary is given).
-    """
+    """Return {solris_code: area_ha} for all SOLRIS classes."""
     nodata_val = None
     if geojson is not None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -200,10 +119,7 @@ def compute_solris_areas(solris_tif: str, geojson: str | None = None) -> dict:
     return areas
 
 
-# ── Step 1b: Clip change raster to GeoJSON ────────────────────────────────────
-
 def clip_to_geojson(change_tif: str, geojson: str, output: str) -> None:
-    """Clip the change raster to the GeoJSON boundary using gdal.Warp."""
     opts = gdal.WarpOptions(
         cutlineDSName=geojson,
         cropToCutline=True,
@@ -215,15 +131,12 @@ def clip_to_geojson(change_tif: str, geojson: str, output: str) -> None:
     )
     ds = gdal.Warp(output, change_tif, options=opts)
     if ds is None:
-        sys.exit("Error: gdal.Warp (clip) returned None — check inputs.")
+        sys.exit("Error: gdal.Warp (clip) returned None; check inputs.")
     ds.FlushCache()
     ds = None
 
 
-# ── Steps 2a + 2b: Warp SOLRIS → mask to change pixels ───────────────────────
-
 def warp_solris_to_match(solris_tif: str, reference_tif: str, output: str) -> None:
-    """Warp SOLRIS to match the CRS, resolution, and extent of the reference raster."""
     ref_ds = gdal.Open(reference_tif, gdal.GA_ReadOnly)
     if ref_ds is None:
         sys.exit(f"Error: cannot open reference raster: {reference_tif}")
@@ -232,7 +145,7 @@ def warp_solris_to_match(solris_tif: str, reference_tif: str, output: str) -> No
     x_min = gt[0]
     y_max = gt[3]
     x_max = x_min + gt[1] * ref_ds.RasterXSize
-    y_min = y_max + gt[5] * ref_ds.RasterYSize  # gt[5] is negative
+    y_min = y_max + gt[5] * ref_ds.RasterYSize
     x_res = abs(gt[1])
     y_res = abs(gt[5])
     proj = ref_ds.GetProjection()
@@ -251,24 +164,20 @@ def warp_solris_to_match(solris_tif: str, reference_tif: str, output: str) -> No
     )
     ds = gdal.Warp(output, solris_tif, options=opts)
     if ds is None:
-        sys.exit("Error: gdal.Warp (SOLRIS resample) returned None — check inputs.")
+        sys.exit("Error: gdal.Warp (SOLRIS resample) returned None; check inputs.")
     ds.FlushCache()
     ds = None
 
 
 def create_masked_solris(solris_path: str, change_path: str) -> None:
-    """Write a masked SOLRIS raster to /vsimem/:
-    pixels where change != 0 → SOLRIS value; all others → 0 (NoData).
-    """
+    """Write a masked SOLRIS raster to /vsimem/."""
     solris_ds = gdal.Open(solris_path, gdal.GA_ReadOnly)
     change_ds = gdal.Open(change_path, gdal.GA_ReadOnly)
 
     solris_arr = solris_ds.GetRasterBand(1).ReadAsArray()
     change_arr = change_ds.GetRasterBand(1).ReadAsArray()
-
     change_nodata = change_ds.GetRasterBand(1).GetNoDataValue()
 
-    # Where change is non-zero (and not NoData), keep the SOLRIS code
     if change_nodata is not None:
         mask = (change_arr != 0) & (change_arr != change_nodata)
     else:
@@ -298,13 +207,7 @@ def create_masked_solris(solris_path: str, change_path: str) -> None:
     change_ds = None
 
 
-# ── Step 2c: Polygonize masked SOLRIS ─────────────────────────────────────────
-
 def polygonize_masked(srs_wkt: str) -> ogr.DataSource:
-    """Polygonize the masked SOLRIS raster (in /vsimem/) into a GPKG DataSource.
-
-    Returns the in-memory DataSource (caller must keep a reference to keep it alive).
-    """
     src_ds = gdal.Open(_VSIMEM_MASKED, gdal.GA_ReadOnly)
     if src_ds is None:
         sys.exit("Error: cannot open masked SOLRIS raster in /vsimem/")
@@ -343,8 +246,6 @@ def polygonize_masked(srs_wkt: str) -> ogr.DataSource:
     return mem_ds
 
 
-# ── Step 3: Compute delta fields and write to GeoPackage ─────────────────────
-
 def _add_field(layer_defn, out_layer, name, field_type):
     if layer_defn.GetFieldIndex(name) == -1:
         out_layer.CreateField(ogr.FieldDefn(name, field_type))
@@ -357,12 +258,7 @@ def write_impact_gpkg(
     lookup: dict,
     srs_wkt: str,
     context_areas: dict | None = None,
-) -> None:
-    """Iterate polygonized features, compute ES change fields, write to GeoPackage.
-
-    Change fields are driven entirely by the CHANGE_FIELDS / compute_change()
-    protocol on each discovered *Processor class — no hardcoding required.
-    """
+) -> list[tuple[int, int, float]]:
     processors = discover_processors()
     new_vals = es_values(lookup, new_code)
 
@@ -384,20 +280,20 @@ def write_impact_gpkg(
     )
 
     defn = out_layer.GetLayerDefn()
-    for name, ftype in [
+    for name, ftype in (
         ("old_solris_code", ogr.OFTInteger),
         ("new_solris_code", ogr.OFTInteger),
         ("area_ha", ogr.OFTReal),
-    ]:
+    ):
         _add_field(defn, out_layer, name, ftype)
 
     for cls in processors:
         for field_name in cls.CHANGE_FIELDS:
             _add_field(defn, out_layer, field_name, ogr.OFTReal)
 
+    transitions = []
     out_layer.StartTransaction()
     src_layer.ResetReading()
-    aq_weighted_change = 0.0
 
     for feat in src_layer:
         old_code = feat.GetField("old_solris_code")
@@ -408,15 +304,12 @@ def write_impact_gpkg(
         if geom is None:
             continue
 
-        # Promote to MultiPolygon for consistency
         if geom.GetGeometryType() == ogr.wkbPolygon:
             multi = ogr.Geometry(ogr.wkbMultiPolygon)
             multi.AddGeometry(geom)
             geom = multi
 
-        area_m2 = geom.GetArea()
-        area_ha = area_m2 / 10000.0
-
+        area_ha = geom.GetArea() / 10000.0
         old_vals = es_values(lookup, old_code)
 
         out_feat = ogr.Feature(out_layer.GetLayerDefn())
@@ -427,28 +320,26 @@ def write_impact_gpkg(
 
         for cls in processors:
             for field_name, value in cls.compute_change(
-                area_ha, old_vals, new_vals,
+                area_ha,
+                old_vals,
+                new_vals,
                 context_areas=context_areas,
                 old_code=old_code,
                 new_code=new_code,
             ).items():
                 out_feat.SetField(field_name, round(value, 6))
-                if field_name == "change_aesthetic_score":
-                    aq_weighted_change += value * area_ha
 
         out_layer.CreateFeature(out_feat)
+        transitions.append((old_code, new_code, area_ha))
 
     out_layer.CommitTransaction()
     out_ds.FlushCache()
     out_ds = None
 
-    return aq_weighted_change
+    return transitions
 
-
-# ── Step 5: Upload to Supabase ────────────────────────────────────────────────
 
 def upload_to_supabase(gpkg_path: str, table_name: str) -> None:
-    """Upload the impact GeoPackage to Supabase via ogr2ogr."""
     supabase_url = os.getenv("SUPABASE_URL")
     if not supabase_url:
         print("  Skipping upload: SUPABASE_URL is not set in .env.")
@@ -459,14 +350,19 @@ def upload_to_supabase(gpkg_path: str, table_name: str) -> None:
 
     cmd = [
         "ogr2ogr",
-        "-f", "PostgreSQL",
+        "-f",
+        "PostgreSQL",
         pg_conn,
         gpkg_path,
         _OUTPUT_LAYER,
-        "-nln", f"public.{table_name}",
-        "-nlt", "MULTIPOLYGON",
-        "-lco", "GEOMETRY_NAME=geom",
-        "-lco", "FID=id",
+        "-nln",
+        f"public.{table_name}",
+        "-nlt",
+        "MULTIPOLYGON",
+        "-lco",
+        "GEOMETRY_NAME=geom",
+        "-lco",
+        "FID=id",
         "-unsetFid",
         "-overwrite",
         "-progress",
@@ -481,62 +377,56 @@ def upload_to_supabase(gpkg_path: str, table_name: str) -> None:
             print(result.stderr)
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
 def main():
     args = parse_args()
+    change_tif = resolve_repo_path(args.change_tif)
+    solris_tif = resolve_repo_path(args.solris_tif)
+    geojson = resolve_optional_repo_path(args.geojson)
+    output_gpkg = ensure_parent_dir(args.output_gpkg)
 
-    if not os.path.exists(args.change_tif):
-        sys.exit(f"Error: change TIF not found: {args.change_tif}")
-    if not os.path.exists(args.solris_tif):
-        sys.exit(f"Error: SOLRIS TIF not found: {args.solris_tif}")
-    if args.geojson and not os.path.exists(args.geojson):
-        sys.exit(f"Error: GeoJSON not found: {args.geojson}")
-
-    if not os.path.exists(_SOLRIS_LOOKUP_CSV):
-        sys.exit(f"Error: SOLRIS lookup CSV not found: {_SOLRIS_LOOKUP_CSV}")
-    if not os.path.exists(_WF_LOOKUP_CSV):
-        sys.exit(f"Error: water filtration lookup CSV not found: {_WF_LOOKUP_CSV}")
-
-    os.makedirs(os.path.dirname(os.path.abspath(args.output_gpkg)), exist_ok=True)
+    if not change_tif.exists():
+        sys.exit(f"Error: change TIF not found: {change_tif}")
+    if not solris_tif.exists():
+        sys.exit(f"Error: SOLRIS TIF not found: {solris_tif}")
+    if geojson and not geojson.exists():
+        sys.exit(f"Error: GeoJSON not found: {geojson}")
 
     print("\nLoading ecosystem service lookup tables...")
-    lookup = load_es_lookup(_SOLRIS_LOOKUP_CSV, _WF_LOOKUP_CSV)
+    lookup, lookup_source = load_lookup_dict(prefer_supabase=True, require_supabase=False)
     if args.new_solris_code not in lookup:
         sys.exit(
             f"Error: new SOLRIS code {args.new_solris_code} not found in lookup. "
             f"Available codes: {sorted(lookup.keys())}"
         )
-    print(f"  Loaded {len(lookup)} SOLRIS classes.")
+    print(f"  Loaded {len(lookup)} SOLRIS classes from {lookup_source}.")
 
-    if args.geojson:
-        print(f"\nComputing SOLRIS composition within boundary: {args.geojson}")
-        context_areas = compute_solris_areas(args.solris_tif, args.geojson)
+    if geojson:
+        print(f"\nComputing SOLRIS composition within boundary: {geojson}")
+        context_areas = compute_solris_areas(str(solris_tif), str(geojson))
     else:
-        print("\nNo boundary provided — using full SOLRIS raster for rarity context...")
-        context_areas = compute_solris_areas(args.solris_tif)
+        print("\nNo boundary provided - using full SOLRIS raster for rarity context...")
+        context_areas = compute_solris_areas(str(solris_tif))
     print(f"  Found {len(context_areas)} SOLRIS classes.")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        change_tif = args.change_tif
+        working_change_tif = str(change_tif)
 
-        if args.geojson:
-            print(f"\nStep 1b: Clipping change raster to GeoJSON: {args.geojson}")
+        if geojson:
+            print(f"\nStep 1b: Clipping change raster to GeoJSON: {geojson}")
             clipped_change = os.path.join(tmpdir, "change_clipped.tif")
-            clip_to_geojson(change_tif, args.geojson, clipped_change)
-            change_tif = clipped_change
-            print(f"  → {clipped_change}")
+            clip_to_geojson(working_change_tif, str(geojson), clipped_change)
+            working_change_tif = clipped_change
+            print(f"  -> {clipped_change}")
 
         print("\nStep 2a: Warping SOLRIS to match change raster...")
         resampled_solris = os.path.join(tmpdir, "solris_resampled.tif")
-        warp_solris_to_match(args.solris_tif, change_tif, resampled_solris)
-        print(f"  → {resampled_solris}")
+        warp_solris_to_match(str(solris_tif), working_change_tif, resampled_solris)
+        print(f"  -> {resampled_solris}")
 
         print("\nStep 2b: Masking SOLRIS to change area pixels...")
-        create_masked_solris(resampled_solris, change_tif)
-        print(f"  → {_VSIMEM_MASKED}")
+        create_masked_solris(resampled_solris, working_change_tif)
+        print(f"  -> {_VSIMEM_MASKED}")
 
-        # Read the SRS from the masked raster for later use
         masked_ds = gdal.Open(_VSIMEM_MASKED, gdal.GA_ReadOnly)
         srs_wkt = masked_ds.GetProjection()
         masked_ds = None
@@ -544,31 +434,36 @@ def main():
         print("\nStep 2c: Polygonizing masked SOLRIS raster...")
         poly_ds = polygonize_masked(srs_wkt)
         src_count = poly_ds.GetLayer(_OUTPUT_LAYER).GetFeatureCount()
-        print(f"  → {src_count} polygons (before filtering zero/null codes)")
+        print(f"  -> {src_count} polygons (before filtering zero/null codes)")
 
-    print(f"\nStep 3+4: Computing ES delta fields and writing GeoPackage...")
-    aq_weighted_change = write_impact_gpkg(poly_ds, args.output_gpkg, args.new_solris_code, lookup, srs_wkt, context_areas=context_areas)
+    print("\nStep 3+4: Computing ES delta fields and writing GeoPackage...")
+    transitions = write_impact_gpkg(
+        poly_ds,
+        str(output_gpkg),
+        args.new_solris_code,
+        lookup,
+        srs_wkt,
+        context_areas=context_areas,
+    )
     poly_ds = None
 
-    # Clean up vsimem
     if gdal.VSIStatL(_VSIMEM_MASKED):
         gdal.Unlink(_VSIMEM_MASKED)
     if gdal.VSIStatL(_VSIMEM_POLYGONIZED):
         gdal.Unlink(_VSIMEM_POLYGONIZED)
 
-    print(f"  → {args.output_gpkg}")
+    print(f"  -> {output_gpkg}")
 
-    total_area_ha = sum(context_areas.values())
     aq_before = landscape_aq(lookup, context_areas)
-    aq_after = aq_before + aq_weighted_change / total_area_ha
-    area_label = "boundary" if args.geojson else "full SOLRIS extent"
+    aq_after = landscape_aq(lookup, apply_land_cover_changes(context_areas, transitions))
+    area_label = "boundary" if geojson else "full SOLRIS extent"
     print(f"\nLandscape aesthetic quality ({area_label}):")
     print(f"  Before: {aq_before:.3f}")
     print(f"  After:  {aq_after:.3f}")
     print(f"  Delta:  {aq_after - aq_before:+.3f}")
 
     print("\nStep 5: Uploading to Supabase...")
-    upload_to_supabase(args.output_gpkg, args.table)
+    upload_to_supabase(str(output_gpkg), args.table)
 
     print("\nDone.")
 

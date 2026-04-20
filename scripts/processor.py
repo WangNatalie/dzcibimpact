@@ -1,13 +1,13 @@
 import os
 import pandas as pd
-from sqlalchemy import create_engine
 import logging
 import argparse
 
-from dotenv import load_dotenv
 from ecosystem_services import discover_processors
+from lookup_support import load_lookup_tables, supabase_engine
+from runtime_support import ensure_parent_dir, load_project_dotenv, resolve_repo_path
 
-load_dotenv()
+load_project_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,28 +16,24 @@ logger = logging.getLogger(__name__)
 # ── Supabase connection ────────────────────────────────────────────────────────
 
 def _supabase_engine():
-    supabase_url = os.getenv("SUPABASE_URL")
-    if not supabase_url:
-        raise RuntimeError("SUPABASE_URL is not set in .env")
-    conn_str = supabase_url.replace("postgres://", "postgresql://", 1)
-    return create_engine(conn_str)
+    return supabase_engine(required=True)
 
 
 # ── Output helpers ─────────────────────────────────────────────────────────────
 
 def _write_es_outputs(df, proc, study_area, folder, csv_cols, report_label):
     """Write per-ES CSV and report .txt to data/{study_area}/{folder}/."""
-    out_dir = os.path.join("data", study_area, folder)
-    os.makedirs(out_dir, exist_ok=True)
+    out_dir = resolve_repo_path(os.path.join("data", study_area, folder))
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    csv_path    = os.path.join(out_dir, f"{folder}_results.csv")
-    report_path = os.path.join(out_dir, f"{folder}_report.txt")
+    csv_path = out_dir / f"{folder}_results.csv"
+    report_path = out_dir / f"{folder}_report.txt"
 
     df[csv_cols].to_csv(csv_path, index=False)
     logger.info(f"Wrote {csv_path}")
 
     report = proc.generate_report(study_area, results_df=df)
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write(report)
     logger.info(f"Wrote {report_path}")
     print(report)
@@ -94,10 +90,11 @@ def main():
     engine = _supabase_engine()
     try:
         logger.info("Loading lookup tables from Supabase...")
-        solris_df = pd.read_sql("SELECT * FROM solris_lookup", engine)
-        wf_df = pd.read_sql("SELECT * FROM water_filtration_lookup", engine).rename(
-            columns={"wetland_type": "solris_class", "value": "wf_value_per_ha"}
+        solris_df, wf_df, lookup_source = load_lookup_tables(
+            prefer_supabase=True,
+            require_supabase=True,
         )
+        logger.info("Loaded lookup tables from %s.", lookup_source)
 
         logger.info(f"Loading area data from Supabase table '{args.source_table}'...")
         area_df = pd.read_sql(
@@ -120,7 +117,9 @@ def main():
 
     study_area = args.study_area
     table_name = f"ecosystem_services_results_{study_area}"
-    output_csv = os.path.join("data", study_area, "ecosystem_services_report.csv")
+    output_csv = ensure_parent_dir(
+        os.path.join("data", study_area, "ecosystem_services_report.csv")
+    )
 
     # ── Upload to Supabase ─────────────────────────────────────────────────────
     upload_engine = _supabase_engine()
@@ -131,7 +130,6 @@ def main():
         upload_engine.dispose()
 
     # ── Export CSV ─────────────────────────────────────────────────────────────
-    os.makedirs(os.path.dirname(output_csv), exist_ok=True)
     combined.to_csv(output_csv, index=False)
     logger.info(f"Report written to {output_csv}")
 
