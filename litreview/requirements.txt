@@ -1,0 +1,6 @@
+requests>=2.31
+python-dotenv>=1.0
+# Azure OpenAI client (classification / extraction stages)
+openai>=1.30
+# value normalization (currency + inflation) and tabular outputs
+pandas>=2.0
