@@ -38,6 +38,16 @@ def _headers() -> dict[str, str]:
     return h
 
 
+def to_s2_query(query: str) -> str:
+    """Translate an OpenAlex-style search string to S2 bulk-search syntax.
+
+    OpenAlex joins clauses with ` AND `; the S2 bulk endpoint treats a space
+    between terms as AND, so the only rewrite needed is dropping the keyword.
+    Quoted phrases work in both. Used so callers can pass one query to both.
+    """
+    return query.replace(" AND ", " ").strip()
+
+
 def _map_paper(p: dict) -> Paper:
     ext = p.get("externalIds") or {}
     doi = ext.get("DOI")
@@ -77,8 +87,13 @@ def search(
     max_results: int = 500,
     sleep: float = 1.0,
 ) -> Iterator[Paper]:
-    """Relevance-ranked bulk search. Token-paginated, up to ~1000/page."""
-    params: dict[str, str] = {"query": query, "fields": ",".join(FIELDS)}
+    """Relevance-ranked bulk search. Token-paginated, up to ~1000/page.
+
+    `query` may be an OpenAlex-style string (` AND `-joined); it is normalized
+    to S2 syntax via to_s2_query so the same query works against both sources.
+    """
+    params: dict[str, str] = {"query": to_s2_query(query),
+                              "fields": ",".join(FIELDS)}
     if year_from or year_to:
         lo = year_from or 1900
         hi = year_to or 2100

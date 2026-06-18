@@ -26,9 +26,9 @@ from ..config import SETTINGS
 
 VALUE_COL = "Int$ Per Hectare Per Year"
 
-# ESVD stores ISO-3 country codes; OpenAlex uses ISO-2. This is the ESVD-side
-# North America set (US + Canada + Mexico) matching the OpenAlex US/CA/MX.
+# ESVD stores ISO-3 country codes
 NORTH_AMERICA_ESVD_CODES = ["USA", "CAN", "MEX"]
+CANADA_ESVD_CODES = ["CAN"]
 
 # --- crosswalk: our ecosystem-service keyword -> ESVD standardized ES_1 cats ---
 # ES_1 is the cleanest service field (23 TEEB categories, exhaustively listed
@@ -246,3 +246,7 @@ def load(path: Optional[str] = None) -> ESVD:
 
 def north_america_country_codes() -> list[str]:
     return NORTH_AMERICA_ESVD_CODES
+
+
+def canada_country_codes() -> list[str]:
+    return CANADA_ESVD_CODES

@@ -22,6 +22,7 @@ from ..config import SETTINGS, NORTH_AMERICA_COUNTRY_CODES
 from ..models import Paper
 
 BASE_URL = "https://api.openalex.org/works"
+TOPICS_URL = "https://api.openalex.org/topics"
 
 
 def _headers() -> dict[str, str]:
@@ -132,12 +133,40 @@ def faceted_groups(
     return out
 
 
+def resolve_topic_id(name: str) -> Optional[dict]:
+    """Resolve a Topic display name to its OpenAlex id (e.g. 'T10168').
+
+    keywords_topics.csv stores Topic *display names*; works can only be
+    filtered by Topic *id*, so this looks the name up via the topics endpoint
+    and returns the best (most-cited) match as {id, display_name, works_count},
+    or None if nothing matches. No LLM involved — exact/relevance match only.
+    """
+    params = {"filter": f"display_name.search:{name}",
+              "sort": "works_count:desc", "per_page": "5"}
+    r = requests.get(TOPICS_URL, params=params, headers=_headers(),
+                     timeout=SETTINGS.request_timeout)
+    r.raise_for_status()
+    results = r.json().get("results", [])
+    if not results:
+        return None
+    # Prefer a case-insensitive exact name match; else the top relevance hit.
+    exact = next((t for t in results
+                  if t.get("display_name", "").lower() == name.lower()), None)
+    t = exact or results[0]
+    return {
+        "id": t["id"].rsplit("/", 1)[-1],   # short id, e.g. 'T10168'
+        "display_name": t.get("display_name", ""),
+        "works_count": t.get("works_count", 0),
+    }
+
+
 def total_count(
     *,
-    search: str,
+    search: Optional[str] = None,
     year_from: Optional[int] = None,
     year_to: Optional[int] = None,
     country_codes: Optional[list[str]] = None,
+    extra: Optional[dict[str, str]] = None,
 ) -> int:
     """Total number of works matching a query (the denominator)."""
     params = _build_filter(
@@ -145,6 +174,7 @@ def total_count(
         year_from=year_from,
         year_to=year_to,
         country_codes=country_codes,
+        extra=extra,
     )
     params["per_page"] = "1"
     r = requests.get(BASE_URL, params=params, headers=_headers(),
@@ -194,23 +224,27 @@ def _map_work(w: dict) -> Paper:
 
 def search(
     *,
-    search: str,
+    search: Optional[str] = None,
     year_from: Optional[int] = None,
     year_to: Optional[int] = None,
     country_codes: Optional[list[str]] = None,
+    extra: Optional[dict[str, str]] = None,
     max_results: int = 500,
     per_page: int = 200,
     sleep: float = 0.0,
 ) -> Iterator[Paper]:
     """Yield Paper records for a query, cursor-paginated.
 
-    `max_results` caps the pull; raise it for full enumeration runs.
+    `max_results` caps the pull; raise it for full enumeration runs. `extra`
+    passes additional filter clauses (e.g. {'primary_topic.id': 'T10168'}) so
+    callers can enumerate a Topic rather than a free-text search.
     """
     params = _build_filter(
         search=search,
         year_from=year_from,
         year_to=year_to,
         country_codes=country_codes,
+        extra=extra,
     )
     params["per_page"] = str(min(per_page, 200))
     cursor = "*"
