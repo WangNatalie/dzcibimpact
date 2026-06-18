@@ -2,8 +2,9 @@
 
 Prints (and optionally writes) robust median/IQR summaries of ESVD's
 `Int$ Per Hectare Per Year` by ecosystem service and by ecosystem type, for
-global and North American (US/CA/MX) scopes. This is the self-contained version
-of the tier-1/2 value tables — it needs only the ESVD CSV, no web APIs.
+global, North American (US/CA/MX), and Canada-only scopes. This is the self-
+contained version of the tier-1/2 value tables — it needs only the ESVD CSV,
+no web APIs.
 
 Usage:
     python -m litreview.esvd_summary
@@ -37,16 +38,23 @@ def _print_table(title: str, df: pd.DataFrame, index_col: str) -> None:
 def build(
     db: esvd.ESVD, *, reviewed_only: bool = False
 ) -> dict[str, pd.DataFrame]:
-    """Return the four summary tables as DataFrames."""
+    """Return the six summary tables as DataFrames (3 scopes x 2 facets)."""
     na = esvd.north_america_country_codes()
+    ca = esvd.canada_country_codes()
     return {
         "service_global": db.summary_by("service", reviewed_only=reviewed_only),
         "service_north_america": db.summary_by(
             "service", country_codes=na, reviewed_only=reviewed_only
         ),
+        "service_canada": db.summary_by(
+            "service", country_codes=ca, reviewed_only=reviewed_only
+        ),
         "ecosystem_global": db.summary_by("ecosystem", reviewed_only=reviewed_only),
         "ecosystem_north_america": db.summary_by(
             "ecosystem", country_codes=na, reviewed_only=reviewed_only
+        ),
+        "ecosystem_canada": db.summary_by(
+            "ecosystem", country_codes=ca, reviewed_only=reviewed_only
         ),
     }
 
@@ -70,18 +78,22 @@ def run(
                      tables["service_global"], "service")
         _print_table("NORTH AMERICA (US/CA/MX) — by ecosystem service",
                      tables["service_north_america"], "service")
+        _print_table("CANADA — by ecosystem service",
+                     tables["service_canada"], "service")
         _print_table("GLOBAL — by ecosystem type",
                      tables["ecosystem_global"], "ecosystem")
         _print_table("NORTH AMERICA (US/CA/MX) — by ecosystem type",
                      tables["ecosystem_north_america"], "ecosystem")
+        _print_table("CANADA — by ecosystem type",
+                     tables["ecosystem_canada"], "ecosystem")
 
-    out_dir = out_dir or SETTINGS.output_dir
+    out_dir = os.path.join(out_dir or SETTINGS.output_dir, "esvd")
     os.makedirs(out_dir, exist_ok=True)
     for name, df in tables.items():
         path = os.path.join(out_dir, f"esvd_summary_{name}.csv")
-        df.to_csv(path, index=False)
+        df.to_csv(path, index=False, encoding="utf-8-sig")
     if do_print:
-        print(f"\nWrote 4 CSVs to {out_dir}/esvd_summary_*.csv")
+        print(f"\nWrote {len(tables)} CSVs to {out_dir}/")
     return tables
 
 
