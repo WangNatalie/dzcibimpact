@@ -13,8 +13,18 @@ from .models import Paper
 _PRIORITY = {"openalex": 2, "semantic_scholar": 1, "esvd": 0}
 
 
+def _sources(p: Paper) -> list[str]:
+    return p.contributing_sources or ([p.source_db] if p.source_db else [])
+
+
 def _merge(primary: Paper, other: Paper) -> Paper:
     """Fill blanks on `primary` from `other`; prefer S2 for abstract/PDF."""
+    # Record that both sources back this record (for provenance labelling).
+    merged = list(_sources(primary))
+    for s in _sources(other):
+        if s not in merged:
+            merged.append(s)
+    primary.contributing_sources = merged
     if not primary.abstract and other.abstract:
         primary.abstract = other.abstract
     if not primary.oa_pdf_url and other.oa_pdf_url:
@@ -34,6 +44,8 @@ def deduplicate(papers: list[Paper]) -> list[Paper]:
     """Collapse duplicates across sources into one record per dedup_key."""
     by_key: dict[str, Paper] = {}
     for p in papers:
+        if not p.contributing_sources:
+            p.contributing_sources = _sources(p)
         key = p.dedup_key
         if key not in by_key:
             by_key[key] = p

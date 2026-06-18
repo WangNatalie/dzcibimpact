@@ -192,7 +192,7 @@ def write_csv(rows: list[dict], path: str) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if not rows:
         return path
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
         w.writerows(rows)
@@ -203,7 +203,7 @@ def run(
     seed_query: str = "ecosystem service",
     *,
     sample: int = 2000,
-    year_from: Optional[int] = 2000,
+    year_from: Optional[int] = None,
     top_n: int = 500,
     granularity: str = "topic",
 ) -> dict[str, list[dict]]:
@@ -215,8 +215,9 @@ def run(
     ngrams = discover_ngrams(
         seed_query, sample=sample, year_from=year_from, top_n=top_n
     )
-    write_csv(topics, os.path.join(SETTINGS.output_dir, "keywords_topics.csv"))
-    write_csv(ngrams, os.path.join(SETTINGS.output_dir, "keywords_ngrams.csv"))
+    kw_dir = os.path.join(SETTINGS.output_dir, "keywords")
+    write_csv(topics, os.path.join(kw_dir, "keywords_topics.csv"))
+    write_csv(ngrams, os.path.join(kw_dir, "keywords_ngrams.csv"))
     return {"topics": topics, "ngrams": ngrams}
 
 
@@ -237,8 +238,8 @@ def main() -> None:
         help="abstracts to sample for the n-gram pass (default: %(default)s)",
     )
     parser.add_argument(
-        "--year-from", type=int, default=1980,
-        help="publication year floor (default: %(default)s)",
+        "--year-from", type=int, default=None,
+        help="publication year floor (default: no year filter)",
     )
     parser.add_argument(
         "--top-n", type=int, default=500,
@@ -259,10 +260,11 @@ def main() -> None:
         top_n=args.top_n,
         granularity=args.granularity,
     )
+    kw_dir = os.path.join(SETTINGS.output_dir, "keywords")
     print(f"{len(results['topics'])} topics  -> "
-          f"{os.path.join(SETTINGS.output_dir, 'keywords_topics.csv')}")
+          f"{os.path.join(kw_dir, 'keywords_topics.csv')}")
     print(f"{len(results['ngrams'])} n-grams  -> "
-          f"{os.path.join(SETTINGS.output_dir, 'keywords_ngrams.csv')}")
+          f"{os.path.join(kw_dir, 'keywords_ngrams.csv')}")
 
 
 if __name__ == "__main__":

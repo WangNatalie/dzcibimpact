@@ -7,9 +7,9 @@ ecosystem type) showing, side by side,
     (ESVD, robust median + IQR).
 
 Counts and values come from two independent sources, so the table reports them
-as parallel columns rather than implying one was derived from the other. The
-"global" scope is unfiltered; "North America" is US/CA/MX (OpenAlex ISO-2 for
-counts, ESVD ISO-3 for values).
+as parallel columns rather than implying one was derived from the other. Each
+metric is reported at three nested scopes: "global" (unfiltered), "North
+America" (US/CA/MX), and "Canada" (CA only).
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ from .config import (
     ECOSYSTEM_SERVICE_KEYWORDS,
     ECOSYSTEM_KEYWORDS,
     NORTH_AMERICA_COUNTRY_CODES,
+    CANADA_COUNTRY_CODES,
 )
 from .sources import openalex, esvd
 
@@ -83,12 +84,14 @@ def _facet_table(
     terms: list[str],
     db: Optional[esvd.ESVD],
     *,
-    year_from: Optional[int] = 2000,
+    year_from: Optional[int] = None,
     sleep: float = 0.1,
 ) -> pd.DataFrame:
     """Build the joined counts+values table for a list of terms."""
     na_oa = NORTH_AMERICA_COUNTRY_CODES                 # ISO-2 for OpenAlex
     na_esvd = esvd.north_america_country_codes()        # ISO-3 for ESVD
+    ca_oa = CANADA_COUNTRY_CODES                        # ISO-2 for OpenAlex
+    ca_esvd = esvd.canada_country_codes()               # ISO-3 for ESVD
     rows = []
     for term in terms:
         query = count_query(term)
@@ -97,38 +100,47 @@ def _facet_table(
         na_papers = openalex.total_count(
             search=query, year_from=year_from, country_codes=na_oa)
         time.sleep(sleep)
+        ca_papers = openalex.total_count(
+            search=query, year_from=year_from, country_codes=ca_oa)
+        time.sleep(sleep)
         g_val = _value_cells(db, facet, term, None)
         na_val = _value_cells(db, facet, term, na_esvd)
+        ca_val = _value_cells(db, facet, term, ca_esvd)
         rows.append({
             facet: term,
             "count_query": query,
             "papers_global": g_papers,
             "papers_north_america": na_papers,
+            "papers_canada": ca_papers,
             "na_share": round(na_papers / g_papers, 3) if g_papers else None,
+            "ca_share": round(ca_papers / g_papers, 3) if g_papers else None,
             "value_median_global": g_val["median"],
             "value_iqr_global": g_val["iqr"],
             "esvd_studies_global": g_val["n_studies"],
             "value_median_north_america": na_val["median"],
             "value_iqr_north_america": na_val["iqr"],
             "esvd_studies_north_america": na_val["n_studies"],
+            "value_median_canada": ca_val["median"],
+            "value_iqr_canada": ca_val["iqr"],
+            "esvd_studies_canada": ca_val["n_studies"],
         })
     return pd.DataFrame(rows)
 
 
-def service_table(db: Optional[esvd.ESVD] = None, *, year_from: int = 2000,
+def service_table(db: Optional[esvd.ESVD] = None, *, year_from: Optional[int] = None,
                   sleep: float = 0.1) -> pd.DataFrame:
     return _facet_table("service", ECOSYSTEM_SERVICE_KEYWORDS, db,
                         year_from=year_from, sleep=sleep)
 
 
-def ecosystem_table(db: Optional[esvd.ESVD] = None, *, year_from: int = 2000,
+def ecosystem_table(db: Optional[esvd.ESVD] = None, *, year_from: Optional[int] = None,
                     sleep: float = 0.1) -> pd.DataFrame:
     return _facet_table("ecosystem", ECOSYSTEM_KEYWORDS, db,
                         year_from=year_from, sleep=sleep)
 
 
 def service_by_ecosystem_counts(
-    *, year_from: int = 2000, region: str = "global", sleep: float = 0.05
+    *, year_from: Optional[int] = None, region: str = "global", sleep: float = 0.05
 ) -> pd.DataFrame:
     """Cross-tab of paper counts: ecosystem service (rows) x ecosystem (cols).
 
@@ -151,7 +163,7 @@ def service_by_ecosystem_counts(
 def run(
     esvd_path: Optional[str] = None,
     *,
-    year_from: int = 2000,
+    year_from: Optional[int] = None,
     with_crosstab: bool = False,
     out_dir: Optional[str] = None,
     do_print: bool = True,
@@ -177,12 +189,13 @@ def run(
         print("\n=== Ecosystem type x region ===")
         print(tables["ecosystem_x_region"].to_string(index=False))
 
-    out_dir = out_dir or SETTINGS.output_dir
+    out_dir = os.path.join(out_dir or SETTINGS.output_dir, "aggregate")
     os.makedirs(out_dir, exist_ok=True)
     for name, df in tables.items():
-        df.to_csv(os.path.join(out_dir, f"aggregate_{name}.csv"), index=False)
+        df.to_csv(os.path.join(out_dir, f"aggregate_{name}.csv"), index=False,
+                  encoding="utf-8-sig")
     if do_print:
-        print(f"\nWrote {len(tables)} CSVs to {out_dir}/aggregate_*.csv")
+        print(f"\nWrote {len(tables)} CSVs to {out_dir}/")
     return tables
 
 
@@ -192,7 +205,8 @@ def main() -> None:
         description="Join OpenAlex paper counts with ESVD value medians into "
                     "service x region and ecosystem x region tables.")
     p.add_argument("--esvd", default=None, help="ESVD CSV (default: $ESVD_CSV)")
-    p.add_argument("--year-from", type=int, default=2000)
+    p.add_argument("--year-from", type=int, default=None,
+                   help="publication year floor (default: no year filter)")
     p.add_argument("--crosstab", action="store_true",
                    help="also build the service x ecosystem count matrix (slow)")
     p.add_argument("--out", default=None, help="output dir (default: outputs)")

@@ -1,11 +1,12 @@
 """Tier-3 pipeline: select transferable papers and fill the target table.
 
 End-to-end:
-  1. gather candidate papers near the Carolinian Zone (OpenAlex region queries),
-  2. screen them against the keyword vocabularies and flag peer-review status,
-  3. score transferability (transferability.py) and keep the best,
-  4. deep-extract each into a target-table row (extract.py, full text + LLM),
-  5. write a CSV with the exact columns of
+  1. Gather candidate papers near the Carolinian Zone, querying BOTH OpenAlex
+     and Semantic Scholar, then deduplicating across the two (see below),
+  2. Screen them against the keyword vocabularies and flag peer-review status,
+  3. Score transferability (transferability.py) and keep the best,
+  4. Deep-extract each into a target-table row (extract.py, full text + LLM),
+  5. Write a CSV with the exact columns of
      research/Ecosystem Services Mapping(Data).csv.
 
 Steps 1-3 need no LLM; step 4 uses Azure OpenAI (falls back to scaffolding-only
@@ -21,8 +22,8 @@ from typing import Optional
 
 from .config import SETTINGS
 from .models import Paper, TableRow
-from .sources import openalex
-from . import screening, peer_review, transferability, extract as extract_mod
+from .sources import openalex, semantic_scholar
+from . import screening, peer_review, transferability, extract as extract_mod, dedup
 
 # Region queries, broad -> these gather candidates; transferability.py then
 # ranks by actual proximity. Phrases are quoted for exact matching.
@@ -43,27 +44,39 @@ def gather_candidates(
     *,
     region_terms: Optional[list[str]] = None,
     per_term: int = 60,
-    year_from: int = 2000,
+    year_from: Optional[int] = None,
     require_ecosystem: bool = False,
     sleep: float = 0.2,
 ) -> list[Paper]:
-    """Search, screen, and peer-review-classify regional candidate papers."""
+    """Search, screen, and peer-review-classify regional candidate papers.
+
+    Pulls from OpenAlex and Semantic Scholar, then dedup.deduplicate merges
+    cross-source duplicates (by DOI/title) into one record whose
+    `contributing_sources` records every source that backed it. S2 has no
+    country filter, but the region terms constrain geography textually.
+    """
     region_terms = region_terms or DEFAULT_REGION_TERMS
-    seen: dict[str, Paper] = {}
+    candidates: list[Paper] = []
     for region in region_terms:
         query = f'"ecosystem services" AND {region}'
-        for paper in openalex.search(
+        papers = list(openalex.search(
             search=query, year_from=year_from,
             country_codes=CANDIDATE_COUNTRIES, max_results=per_term,
-        ):
+        ))
+        try:
+            papers += list(semantic_scholar.search(
+                query=query, year_from=year_from, max_results=per_term))
+        except Exception:
+            pass  # S2 is an enrichment layer; OpenAlex alone still works.
+        for paper in papers:
             screening.screen(paper)
             if not screening.is_relevant(paper, require_ecosystem=require_ecosystem):
                 continue
             peer_review.classify(paper)
             paper.region = "carolinian"
-            seen.setdefault(paper.dedup_key, paper)
+            candidates.append(paper)
         time.sleep(sleep)
-    return list(seen.values())
+    return dedup.deduplicate(candidates)
 
 
 def select(
@@ -90,12 +103,13 @@ def select(
 def write_table(rows: list[TableRow], path: str) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     labels = [label for _, label in TableRow.CSV_COLUMNS]
-    extra = ["Peer Reviewed", "Transferability Score"]
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    extra = ["Data Source(s)", "Peer Reviewed", "Transferability Score"]
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=labels + extra)
         w.writeheader()
         for r in rows:
             d = r.to_csv_dict()
+            d["Data Source(s)"] = r.data_source
             d["Peer Reviewed"] = r.peer_reviewed
             d["Transferability Score"] = r.transferability_score
             w.writerow(d)
@@ -108,7 +122,7 @@ def run(
     per_term: int = 60,
     top_n: int = 25,
     min_score: float = 0.5,
-    year_from: int = 2000,
+    year_from: Optional[int] = None,
     peer_reviewed_only: bool = False,
     use_fulltext: bool = True,
     out_path: Optional[str] = None,
@@ -135,7 +149,7 @@ def run(
                   f"{paper.title[:70]}")
         rows.append(extract_mod.extract_row(paper, use_fulltext=use_fulltext))
 
-    out_path = out_path or os.path.join(SETTINGS.output_dir,
+    out_path = out_path or os.path.join(SETTINGS.output_dir, "filtered",
                                         "tier3_carolinian_table.csv")
     write_table(rows, out_path)
     if do_print:
@@ -151,7 +165,8 @@ def main() -> None:
     p.add_argument("--per-term", type=int, default=60)
     p.add_argument("--top-n", type=int, default=25)
     p.add_argument("--min-score", type=float, default=0.5)
-    p.add_argument("--year-from", type=int, default=2000)
+    p.add_argument("--year-from", type=int, default=None,
+                   help="publication year floor (default: no year filter)")
     p.add_argument("--peer-reviewed-only", action="store_true")
     p.add_argument("--no-fulltext", action="store_true",
                    help="use abstracts only (skip PDF download/parse)")

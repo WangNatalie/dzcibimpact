@@ -22,6 +22,9 @@ class Paper:
     abstract: str = ""
     year: Optional[int] = None
 
+    # Every source_db that contributed to this record after cross-source dedup in dedup.py
+    contributing_sources: list[str] = field(default_factory=list)
+
     # --- venue / provenance ---
     venue: str = ""                     # journal/source display name
     venue_type: str = ""                # journal | repository | conference | book | report
@@ -65,6 +68,19 @@ class Paper:
             return f"doi:{self.doi}"
         return "title:" + "".join(c for c in self.title.lower() if c.isalnum())
 
+    @property
+    def source_label(self) -> str:
+        """Human-readable provenance, e.g. 'OpenAlex + Semantic Scholar'."""
+        names = {"openalex": "OpenAlex",
+                 "semantic_scholar": "Semantic Scholar",
+                 "esvd": "ESVD"}
+        out: list[str] = []
+        for s in (self.contributing_sources or [self.source_db]):
+            label = names.get(s, s)
+            if label and label not in out:
+                out.append(label)
+        return " + ".join(out)
+
     def to_row(self) -> dict[str, Any]:
         """Flatten list fields for CSV export."""
         d = asdict(self)
@@ -94,6 +110,7 @@ class TableRow:
     utility_transferability: str = ""        # Utility/Transferability
 
     # provenance kept out of the user-facing table but useful internally
+    data_source: str = ""                    # "OpenAlex" / "OpenAlex + Semantic Scholar"
     peer_reviewed: Optional[bool] = None
     transferability_score: Optional[float] = None
 

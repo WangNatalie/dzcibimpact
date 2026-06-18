@@ -115,6 +115,7 @@ def extract_row(
             g("utility_transferability")
             or f"[auto] {tscore['rationale']}"
         ),
+        data_source=paper.source_label,
         peer_reviewed=paper.is_peer_reviewed,
         transferability_score=tscore["transferability_score"],
     )

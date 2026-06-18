@@ -145,6 +145,7 @@ ALIASES: dict[str, list[str]] = {
 # and lat/long (see geography.py / transferability.py).
 
 NORTH_AMERICA_COUNTRY_CODES = ["US", "CA", "MX"]
+CANADA_COUNTRY_CODES = ["CA"]
 
 # Rough bounding box for the Carolinian zone / southern Ontario + Great Lakes
 # basin, used as a coarse geographic pre-filter before criteria scoring.
