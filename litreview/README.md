@@ -70,6 +70,16 @@ row per keyword. Each metric is reported at three nested scopes: **global**,
 `aggregate_ecosystem_x_region.csv`, and with `--crosstab` a service×ecosystem
 matrix.
 
+### `provincial` — service/ecosystem × province matrices
+The provincial counterpart to `aggregate`. Breaks the Canadian literature into
+**OpenAlex paper-count matrices** with keywords as rows and the 13 provinces /
+territories as columns (one for services, one for ecosystems). A "province" =
+its name in the title/abstract with a Canadian author institution (default;
+`--any-country` relaxes the institution scope). Counts only — ESVD's Canadian
+coverage is too thin to split values by province (≤2 studies each). Output →
+`outputs/provincial/`: `provincial_service_x_province.csv`,
+`provincial_ecosystem_x_province.csv`.
+
 ### `esvd_summary` — standalone ESVD value tables
 The value half of tier 1/2 with **no web APIs** — just the ESVD CSV. Robust
 median/IQR of Int$/ha/yr by service and by ecosystem, for global / North America
@@ -175,10 +185,11 @@ Both are organized into one subdirectory per stage, and `reports/` mirrors the
 
 ```
 outputs/ (and reports/)
-├── aggregate/   aggregate_*            ← aggregate
-├── esvd/        esvd_summary_*         ← esvd_summary
-├── keywords/    keywords_*             ← keyword_discovery
-└── filtered/    tier3_*, topic_table_* ← tier3, topic_table  (per-paper tables)
+├── aggregate/    aggregate_*            ← aggregate
+├── provincial/   provincial_*           ← provincial
+├── esvd/         esvd_summary_*         ← esvd_summary
+├── keywords/     keywords_*             ← keyword_discovery
+└── filtered/     tier3_*, topic_table_* ← tier3, topic_table  (per-paper tables)
 ```
 
 Re-running a generator overwrites its own outputs; run `report` afterward to

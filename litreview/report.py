@@ -15,7 +15,7 @@ import os
 import re
 from typing import Optional
 
-from .config import SETTINGS
+from .config import SETTINGS, CANADIAN_PROVINCES
 
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
 
@@ -57,6 +57,10 @@ COLUMN_LABELS: dict[str, str] = {
     "doc_freq": "Document Frequency",
     "doc_share": "Document Share",
 }
+
+# provincial_* matrices use province names as column headers — keep them
+# verbatim (so "Newfoundland and Labrador" isn't title-cased to "... And ...").
+COLUMN_LABELS.update({prov: prov for prov in CANADIAN_PROVINCES})
 
 # tier-3 already ships English headers, so it is passed through unchanged except
 # for this column, which is dropped from the human report (the raw 0-1 score is

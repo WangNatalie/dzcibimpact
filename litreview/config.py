@@ -146,6 +146,22 @@ ALIASES: dict[str, list[str]] = {
 
 NORTH_AMERICA_COUNTRY_CODES = ["US", "CA", "MX"]
 CANADA_COUNTRY_CODES = ["CA"]
+CANADIAN_PROVINCES: dict[str, list[str]] = {
+    "Ontario": ["Ontario"],
+    "Quebec": ["Quebec", "Québec"],
+    "British Columbia": ["British Columbia"],
+    "Alberta": ["Alberta"],
+    "Manitoba": ["Manitoba"],
+    "Saskatchewan": ["Saskatchewan"],
+    "Nova Scotia": ["Nova Scotia"],
+    "New Brunswick": ["New Brunswick"],
+    "Newfoundland and Labrador": ["Newfoundland and Labrador", "Newfoundland",
+                                  "Labrador"],
+    "Prince Edward Island": ["Prince Edward Island"],
+    "Northwest Territories": ["Northwest Territories"],
+    "Yukon": ["Yukon"],
+    "Nunavut": ["Nunavut"],
+}
 
 # Rough bounding box for the Carolinian zone / southern Ontario + Great Lakes
 # basin, used as a coarse geographic pre-filter before criteria scoring.
