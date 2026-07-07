@@ -203,6 +203,62 @@ ECOSYSTEM_TO_SOLRIS = {
 }
 
 # --------------------------------------------------------------------------
+# CPA environmental-accounting review (replicates Bebbington, Laine, Larrinaga
+# & Michelon 2023, "Environmental Accounting in the European Accounting Review:
+# A Reflection", EAR 32(5), but for Critical Perspectives on Accounting).
+# --------------------------------------------------------------------------
+# Journal identity, resolved via OpenAlex /sources (eyeballed to confirm).
+CPA_SOURCE_ID = "S66510378"          # Critical Perspectives on Accounting
+CPA_ISSN_L = "1045-2354"
+
+# Inclusive environmental-accounting vocabulary for the keyword prefilter.
+# Deliberately broad (recall over precision); the LLM screen removes the false
+# positives. Historical synonyms included so early-era papers aren't lost.
+# Matching is phrase-based (case-insensitive) against title + abstract.
+CPA_ENV_KEYWORDS = [
+    # core
+    "environmental accounting", "environmental reporting", "environmental disclosure",
+    "environmental audit", "environmental management accounting",
+    "social and environmental accounting", "social and environmental reporting",
+    "social accounting", "social audit", "social disclosure",
+    # sustainability / CSR family
+    "sustainability accounting", "sustainability reporting", "sustainability assurance",
+    "sustainable development", "corporate social responsibility", "CSR reporting",
+    "CSR disclosure", "social responsibility disclosure", "triple bottom line",
+    "non-financial reporting", "non-financial disclosure", "non-financial information",
+    "integrated reporting", "ESG",
+    # climate / carbon
+    "carbon", "greenhouse gas", "GHG", "climate change", "climate disclosure",
+    "emissions trading", "emission allowances", "carbon accounting",
+    "carbon disclosure", "decarbonization",
+    # nature
+    "natural capital", "biodiversity", "ecosystem", "water", "pollution",
+    "green accounting", "full cost accounting", "externalities",
+    # accountability framing common in CPA
+    "accountability", "extinction accounting",
+]
+
+# --- Content-analysis coding schemes (the four EAR axes) ---
+# 1. Accounting sub-area (EAR "Topic/approach" column).
+CPA_SUBAREAS = [
+    "financial reporting",
+    "non-financial reporting",
+    "management accounting",
+    "audit/assurance",
+    "measurement",
+    "other",                # editorial, viewpoint, conceptual, book review
+]
+# 2. Issue specificity: a particular biophysical issue vs. an umbrella construct.
+CPA_ISSUE_SPECIFICITY = ["specific issue", "umbrella construct"]
+# 3. Actor: whose behaviour/role the paper centres on.
+CPA_ACTORS = [
+    "corporation", "managers", "investors", "auditors",
+    "stakeholders", "none/multiple",
+]
+# 4. Orientation: the (often implicit) view of who env accounting is *for*.
+CPA_ORIENTATION = ["for society", "for capital markets", "both/ambiguous"]
+
+# --------------------------------------------------------------------------
 # Value normalization
 # --------------------------------------------------------------------------
 BASE_CURRENCY = "USD"   # target currency for all aggregated $/ha/yr figures
@@ -244,6 +300,31 @@ class Settings:
     # Path to an ESVD / TEEB valuation-database export (CSV).
     esvd_csv: str = field(
         default_factory=lambda: os.getenv("ESVD_CSV", "")
+    )
+    # EBSCO Discovery Service (EDS) API — used for aggregate counts + tier3
+    # candidates (never keyword discovery). Needs an EDS API *profile*
+    # provisioned by your institution; the public EBSCOhost website login is
+    # not the same thing. Left blank -> the EBSCO source is skipped everywhere.
+    ebsco_user_id: str = field(
+        default_factory=lambda: os.getenv("EBSCO_USER_ID", "")
+    )
+    ebsco_password: str = field(
+        default_factory=lambda: os.getenv("EBSCO_PASSWORD", "")
+    )
+    ebsco_profile: str = field(
+        default_factory=lambda: os.getenv("EBSCO_PROFILE", "")
+    )
+    # Web of Science (Clarivate) API — count/candidate source for aggregate +
+    # tier3 (never keyword discovery). Needs a WoS API key from your
+    # institution. Defaults to the Starter API host; override WOS_API_BASE for a
+    # different tier. Left blank -> the WoS source is skipped everywhere.
+    wos_api_key: str = field(
+        default_factory=lambda: os.getenv("WOS_API_KEY", "")
+    )
+    wos_api_base: str = field(
+        default_factory=lambda: os.getenv(
+            "WOS_API_BASE", "https://api.clarivate.com/apis/wos-starter/v1"
+        )
     )
     request_timeout: int = 30
     output_dir: str = os.path.join(os.path.dirname(__file__), "outputs")
