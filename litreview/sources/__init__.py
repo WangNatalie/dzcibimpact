@@ -1,3 +1,3 @@
 """Source clients for the literature review pipeline."""
 
-from . import openalex, semantic_scholar  # noqa: F401
+from . import openalex, semantic_scholar, ebsco, wos  # noqa: F401

@@ -44,12 +44,21 @@ from .fulltext import fetch_fulltext
 # Location profiles: how --location constrains the candidate pull.
 #   country_codes  -> OpenAlex institutions.country_code filter (None = global)
 #   min_score      -> drop papers below this transferability score (None = keep)
+#   region         -> human-readable study-site region for the optional
+#                     --llm-location-filter pass (None = no LLM geo filter)
 # Add a profile here to support a new --location value.
 # --------------------------------------------------------------------------
 LOCATION_PROFILES: dict[str, dict] = {
-    "global": {"country_codes": None, "min_score": None},
-    "north_america": {"country_codes": ["CA", "US", "MX"], "min_score": None},
-    "carolinian": {"country_codes": ["CA", "US"], "min_score": 0.5},
+    "global": {"country_codes": None, "min_score": None, "region": None},
+    "north_america": {
+        "country_codes": ["CA", "US", "MX"], "min_score": None,
+        "region": "North America (Canada, the United States, or Mexico)",
+    },
+    "carolinian": {
+        "country_codes": ["CA", "US"], "min_score": 0.5,
+        "region": "the Carolinian Zone of southern Ontario, Canada, or the "
+                  "adjacent Great Lakes / northeastern United States",
+    },
 }
 
 
@@ -221,7 +230,17 @@ def gather_topic_papers(
             continue
         peer_review.classify(paper)
         candidates.append(paper)
-    return dedup.deduplicate(candidates)
+    merged = dedup.deduplicate(candidates)
+    # OpenAlex filters by country server-side, but the Semantic Scholar
+    # enrichment search has no country filter, so S2-only records can be from
+    # anywhere. Enforce the location constraint on the merged set: keep a paper
+    # only if an author institution sits in one of the requested countries.
+    # (S2 papers that also exist in OpenAlex were merged into the OpenAlex
+    # record above, which retains its author_countries.)
+    if country_codes:
+        wanted = set(country_codes)
+        merged = [p for p in merged if wanted & set(p.author_countries)]
+    return merged
 
 
 def select(
@@ -292,6 +311,7 @@ def run(
     peer_reviewed_only: bool = False,
     use_fulltext: bool = False,
     max_chars: int = 60000,
+    llm_location_filter: bool = False,
     do_print: bool = True,
 ) -> list[TableRow]:
     if location not in LOCATION_PROFILES:
@@ -332,6 +352,31 @@ def run(
     if do_print:
         print(f"Screened {len(cands)} relevant; kept {len(chosen)} after "
               f"location/peer-review filters.")
+
+    # Optional LLM layer: judge each paper's STUDY SITE (not author country) and
+    # drop those outside the region. Catches e.g. NA-affiliated authors studying
+    # sites elsewhere, which the institutions.country_code filter cannot.
+    if llm_location_filter and profile["region"]:
+        from . import llm_azure
+        if not llm_azure.is_configured():
+            if do_print:
+                print("NOTE: --llm-location-filter requested but Azure is not "
+                      "configured; skipping LLM location filter.")
+        else:
+            kept: list[Paper] = []
+            for paper in chosen:
+                verdict = extract_mod.in_region(
+                    paper, profile["region"],
+                    use_fulltext=use_fulltext, max_chars=max_chars)
+                if verdict["in_region"]:
+                    kept.append(paper)
+                elif do_print:
+                    print(f"  [drop: outside {location}] {paper.title[:60]} "
+                          f"(site: {verdict['study_location'] or 'unspecified'})")
+            if do_print:
+                print(f"LLM location filter: kept {len(kept)}/{len(chosen)} "
+                      f"in-region.")
+            chosen = kept
         mode = "LLM (Azure)" if use_llm else "heuristic regex (no LLM)"
         print(f"Extraction mode: {mode}")
         if use_llm:
@@ -382,11 +427,16 @@ def main() -> None:
     p.add_argument("--peer-reviewed-only", action="store_true")
     p.add_argument("--fulltext", action="store_true",
                    help="download + parse PDFs for extraction (slower)")
+    p.add_argument("--llm-location-filter", action="store_true",
+                   help="extra LLM pass that drops papers whose study SITE is "
+                        "outside the --location region (needs Azure; no effect "
+                        "for --location global)")
     args = p.parse_args()
     run(args.term, location=args.location, use_llm=args.llm,
         seed_query=args.seed_query,
         year_from=args.year_from, max_results=args.max_results,
-        peer_reviewed_only=args.peer_reviewed_only, use_fulltext=args.fulltext)
+        peer_reviewed_only=args.peer_reviewed_only, use_fulltext=args.fulltext,
+        llm_location_filter=args.llm_location_filter)
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ from typing import Any, Optional
 @dataclass
 class Paper:
     # --- identity ---
-    source_db: str                      # "openalex" | "semantic_scholar" | "esvd"
+    source_db: str                      # "openalex" | "semantic_scholar" | "esvd" | "ebsco" | "wos"
     source_id: str                      # native id within that source
     doi: Optional[str] = None           # normalized lowercase, no prefix
     title: str = ""
@@ -73,7 +73,9 @@ class Paper:
         """Human-readable provenance, e.g. 'OpenAlex + Semantic Scholar'."""
         names = {"openalex": "OpenAlex",
                  "semantic_scholar": "Semantic Scholar",
-                 "esvd": "ESVD"}
+                 "esvd": "ESVD",
+                 "ebsco": "EBSCO",
+                 "wos": "Web of Science"}
         out: list[str] = []
         for s in (self.contributing_sources or [self.source_db]):
             label = names.get(s, s)

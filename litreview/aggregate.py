@@ -27,7 +27,31 @@ from .config import (
     NORTH_AMERICA_COUNTRY_CODES,
     CANADA_COUNTRY_CODES,
 )
-from .sources import openalex, esvd
+from .sources import openalex, esvd, ebsco, wos
+
+
+# Count sources for the aggregate cross-tabs, in output order. Each entry is
+# (name, module exposing total_count(search=, year_from=, country_codes=),
+#  supports_country). EBSCO has no author-country facet, so its per-region
+# (North America / Canada) cells are left blank rather than faked from a
+# keyword proxy; OpenAlex and WoS do support it. New count sources plug in
+# here. `available_count_sources()` filters to the ones whose credentials are
+# actually configured.
+COUNT_SOURCES: list[tuple[str, object, bool]] = [
+    ("openalex", openalex, True),
+    ("ebsco", ebsco, False),
+    ("wos", wos, True),
+]
+
+
+def available_count_sources() -> list[tuple[str, object, bool]]:
+    """COUNT_SOURCES minus any whose credentials aren't configured."""
+    out = []
+    for name, mod, supports_country in COUNT_SOURCES:
+        if hasattr(mod, "is_configured") and not mod.is_configured():
+            continue
+        out.append((name, mod, supports_country))
+    return out
 
 
 # Below this many distinct studies, a median Int$/ha/yr is too unstable to
@@ -84,10 +108,18 @@ def _facet_table(
     terms: list[str],
     db: Optional[esvd.ESVD],
     *,
+    source: object = openalex,
+    supports_country: bool = True,
     year_from: Optional[int] = None,
     sleep: float = 0.1,
 ) -> pd.DataFrame:
-    """Build the joined counts+values table for a list of terms."""
+    """Build the joined counts+values table for a list of terms.
+
+    Paper counts come from `source` (any module exposing total_count); the
+    ESVD value columns are source-independent. When `supports_country` is
+    False the per-region count cells are left blank (the source can't filter by
+    author country), so the schema stays identical across sources.
+    """
     na_oa = NORTH_AMERICA_COUNTRY_CODES                 # ISO-2 for OpenAlex
     na_esvd = esvd.north_america_country_codes()        # ISO-3 for ESVD
     ca_oa = CANADA_COUNTRY_CODES                        # ISO-2 for OpenAlex
@@ -95,14 +127,17 @@ def _facet_table(
     rows = []
     for term in terms:
         query = count_query(term)
-        g_papers = openalex.total_count(search=query, year_from=year_from)
+        g_papers = source.total_count(search=query, year_from=year_from)
         time.sleep(sleep)
-        na_papers = openalex.total_count(
-            search=query, year_from=year_from, country_codes=na_oa)
-        time.sleep(sleep)
-        ca_papers = openalex.total_count(
-            search=query, year_from=year_from, country_codes=ca_oa)
-        time.sleep(sleep)
+        if supports_country:
+            na_papers = source.total_count(
+                search=query, year_from=year_from, country_codes=na_oa)
+            time.sleep(sleep)
+            ca_papers = source.total_count(
+                search=query, year_from=year_from, country_codes=ca_oa)
+            time.sleep(sleep)
+        else:
+            na_papers = ca_papers = None
         g_val = _value_cells(db, facet, term, None)
         na_val = _value_cells(db, facet, term, na_esvd)
         ca_val = _value_cells(db, facet, term, ca_esvd)
@@ -112,8 +147,10 @@ def _facet_table(
             "papers_global": g_papers,
             "papers_north_america": na_papers,
             "papers_canada": ca_papers,
-            "na_share": round(na_papers / g_papers, 3) if g_papers else None,
-            "ca_share": round(ca_papers / g_papers, 3) if g_papers else None,
+            "na_share": (round(na_papers / g_papers, 3)
+                         if g_papers and na_papers is not None else None),
+            "ca_share": (round(ca_papers / g_papers, 3)
+                         if g_papers and ca_papers is not None else None),
             "value_median_global": g_val["median"],
             "value_iqr_global": g_val["iqr"],
             "esvd_studies_global": g_val["n_studies"],
@@ -127,32 +164,39 @@ def _facet_table(
     return pd.DataFrame(rows)
 
 
-def service_table(db: Optional[esvd.ESVD] = None, *, year_from: Optional[int] = None,
+def service_table(db: Optional[esvd.ESVD] = None, *, source: object = openalex,
+                  supports_country: bool = True, year_from: Optional[int] = None,
                   sleep: float = 0.1) -> pd.DataFrame:
     return _facet_table("service", ECOSYSTEM_SERVICE_KEYWORDS, db,
+                        source=source, supports_country=supports_country,
                         year_from=year_from, sleep=sleep)
 
 
-def ecosystem_table(db: Optional[esvd.ESVD] = None, *, year_from: Optional[int] = None,
+def ecosystem_table(db: Optional[esvd.ESVD] = None, *, source: object = openalex,
+                    supports_country: bool = True, year_from: Optional[int] = None,
                     sleep: float = 0.1) -> pd.DataFrame:
     return _facet_table("ecosystem", ECOSYSTEM_KEYWORDS, db,
+                        source=source, supports_country=supports_country,
                         year_from=year_from, sleep=sleep)
 
 
 def service_by_ecosystem_counts(
-    *, year_from: Optional[int] = None, region: str = "global", sleep: float = 0.05
+    *, source: object = openalex, supports_country: bool = True,
+    year_from: Optional[int] = None, region: str = "global", sleep: float = 0.05
 ) -> pd.DataFrame:
     """Cross-tab of paper counts: ecosystem service (rows) x ecosystem (cols).
 
-    region: "global" or "north_america". Values are OpenAlex paper counts for
+    region: "global" or "north_america". Values are `source` paper counts for
     the conjunction of both terms (service AND ecosystem in title/abstract).
+    A source without country support ignores a non-global region.
     """
-    cc = NORTH_AMERICA_COUNTRY_CODES if region == "north_america" else None
+    cc = (NORTH_AMERICA_COUNTRY_CODES
+          if region == "north_america" and supports_country else None)
     matrix = {}
     for svc in ECOSYSTEM_SERVICE_KEYWORDS:
         row = {}
         for eco in ECOSYSTEM_KEYWORDS:
-            row[eco] = openalex.total_count(
+            row[eco] = source.total_count(
                 search=f'{count_query(svc)} AND "{eco}"',
                 year_from=year_from, country_codes=cc)
             time.sleep(sleep)
@@ -172,38 +216,56 @@ def run(
     if db is None and do_print:
         print("WARN: no ESVD CSV set; value columns will be empty.\n")
 
-    tables = {
-        "service_x_region": service_table(db, year_from=year_from),
-        "ecosystem_x_region": ecosystem_table(db, year_from=year_from),
-    }
-    if with_crosstab:
-        tables["service_by_ecosystem_counts_global"] = \
-            service_by_ecosystem_counts(year_from=year_from, region="global")
-
+    base_dir = out_dir or SETTINGS.output_dir
+    sources = available_count_sources()
     if do_print:
-        pd.set_option("display.max_columns", None, "display.width", 200)
-        print(f"Paper counts: OpenAlex (>= {year_from}). "
+        print(f"Count sources: {', '.join(n for n, _, _ in sources)}. "
               f"Values: ESVD median Int$/ha/yr (IQR).")
-        print("\n=== Ecosystem service x region ===")
-        print(tables["service_x_region"].to_string(index=False))
-        print("\n=== Ecosystem type x region ===")
-        print(tables["ecosystem_x_region"].to_string(index=False))
 
-    out_dir = os.path.join(out_dir or SETTINGS.output_dir, "aggregate")
-    os.makedirs(out_dir, exist_ok=True)
-    for name, df in tables.items():
-        df.to_csv(os.path.join(out_dir, f"aggregate_{name}.csv"), index=False,
-                  encoding="utf-8-sig")
-    if do_print:
-        print(f"\nWrote {len(tables)} CSVs to {out_dir}/")
+    # Each count source gets its own subdirectory so the tables stay comparable
+    # rather than merged (EBSCO and OpenAlex index different corpora and can't
+    # be summed). The returned dict is keyed "<source>/<table>".
+    tables: dict[str, pd.DataFrame] = {}
+    for source_name, mod, supports_country in sources:
+        src_tables = {
+            "service_x_region": service_table(
+                db, source=mod, supports_country=supports_country,
+                year_from=year_from),
+            "ecosystem_x_region": ecosystem_table(
+                db, source=mod, supports_country=supports_country,
+                year_from=year_from),
+        }
+        if with_crosstab:
+            src_tables["service_by_ecosystem_counts_global"] = \
+                service_by_ecosystem_counts(
+                    source=mod, supports_country=supports_country,
+                    year_from=year_from, region="global")
+
+        if do_print:
+            pd.set_option("display.max_columns", None, "display.width", 200)
+            print(f"\n### Source: {source_name} (>= {year_from}) ###")
+            print("=== Ecosystem service x region ===")
+            print(src_tables["service_x_region"].to_string(index=False))
+            print("\n=== Ecosystem type x region ===")
+            print(src_tables["ecosystem_x_region"].to_string(index=False))
+
+        src_dir = os.path.join(base_dir, "aggregate", source_name)
+        os.makedirs(src_dir, exist_ok=True)
+        for name, df in src_tables.items():
+            df.to_csv(os.path.join(src_dir, f"aggregate_{name}.csv"),
+                      index=False, encoding="utf-8-sig")
+            tables[f"{source_name}/{name}"] = df
+        if do_print:
+            print(f"Wrote {len(src_tables)} CSVs to {src_dir}/")
     return tables
 
 
 def main() -> None:
     import argparse
     p = argparse.ArgumentParser(
-        description="Join OpenAlex paper counts with ESVD value medians into "
-                    "service x region and ecosystem x region tables.")
+        description="Join bibliographic paper counts with ESVD value medians "
+                    "into service x region and ecosystem x region tables, one "
+                    "set of files per configured count source (OpenAlex, EBSCO).")
     p.add_argument("--esvd", default=None, help="ESVD CSV (default: $ESVD_CSV)")
     p.add_argument("--year-from", type=int, default=None,
                    help="publication year floor (default: no year filter)")

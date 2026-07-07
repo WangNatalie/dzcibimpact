@@ -10,7 +10,7 @@ from __future__ import annotations
 from .models import Paper
 
 # Which source wins when both have a value for a scalar field.
-_PRIORITY = {"openalex": 2, "semantic_scholar": 1, "esvd": 0}
+_PRIORITY = {"openalex": 2, "ebsco": 2, "wos": 2, "semantic_scholar": 1, "esvd": 0}
 
 
 def _sources(p: Paper) -> list[str]:

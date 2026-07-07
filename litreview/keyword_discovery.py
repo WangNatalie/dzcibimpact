@@ -188,6 +188,12 @@ def discover_ngrams(
 # --------------------------------------------------------------------------
 # Output + orchestration
 # --------------------------------------------------------------------------
+def slugify(text: str) -> str:
+    """Filesystem-safe slug for a search term, e.g. 'Flood Risk' -> 'flood_risk'."""
+    slug = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+    return slug or "query"
+
+
 def write_csv(rows: list[dict], path: str) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if not rows:
@@ -215,10 +221,15 @@ def run(
     ngrams = discover_ngrams(
         seed_query, sample=sample, year_from=year_from, top_n=top_n
     )
-    kw_dir = os.path.join(SETTINGS.output_dir, "keywords")
+    kw_dir = _output_dir(seed_query)
     write_csv(topics, os.path.join(kw_dir, "keywords_topics.csv"))
     write_csv(ngrams, os.path.join(kw_dir, "keywords_ngrams.csv"))
     return {"topics": topics, "ngrams": ngrams}
+
+
+def _output_dir(seed_query: str) -> str:
+    """Per-search-term output dir, e.g. outputs/keywords/ecosystem_service."""
+    return os.path.join(SETTINGS.output_dir, "keywords", slugify(seed_query))
 
 
 def main() -> None:
@@ -260,7 +271,7 @@ def main() -> None:
         top_n=args.top_n,
         granularity=args.granularity,
     )
-    kw_dir = os.path.join(SETTINGS.output_dir, "keywords")
+    kw_dir = _output_dir(args.seed_query)
     print(f"{len(results['topics'])} topics  -> "
           f"{os.path.join(kw_dir, 'keywords_topics.csv')}")
     print(f"{len(results['ngrams'])} n-grams  -> "

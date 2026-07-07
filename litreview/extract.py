@@ -124,3 +124,53 @@ def extract_row(
 
 def extract_rows(papers: list[Paper], **kwargs) -> list[TableRow]:
     return [extract_row(p, **kwargs) for p in papers]
+
+
+_REGION_SYSTEM = (
+    "You determine where a study was geographically conducted, using ONLY the "
+    "provided text. Judge the study SITE (where the data/fieldwork/case is), "
+    "not the authors' affiliations. Respond with a single JSON object."
+)
+
+
+def in_region(
+    paper: Paper,
+    region: str,
+    *,
+    use_fulltext: bool = False,
+    max_chars: int = 8000,
+) -> dict:
+    """Ask the LLM whether the paper's STUDY SITE falls within `region`.
+
+    Returns {"in_region": bool, "study_location": str}. Fails open: when Azure
+    is unavailable or there is no text to read, returns in_region=True so this
+    layer never silently drops every paper.
+    """
+    if not llm_azure.is_configured():
+        return {"in_region": True, "study_location": ""}
+    if use_fulltext:
+        text, _ = fetch_fulltext(paper, max_chars=max_chars)
+    else:
+        text = paper.abstract or ""
+    text = text.strip()
+    if not text:
+        return {"in_region": True, "study_location": ""}
+    user = (
+        f"REGION OF INTEREST: {region}\n\n"
+        f"Title: {paper.title}\n"
+        f"Text:\n{text}\n\n"
+        "Where was this study geographically conducted? Decide whether its "
+        "study site(s) fall within the region of interest. A global or "
+        "multi-region study counts as in-region only if the region of interest "
+        "is one of its sites. A paper with no identifiable site is NOT "
+        "in-region. Return JSON with keys: \"study_location\" (place names, or "
+        "'unspecified') and \"in_region\" (true or false)."
+    )
+    try:
+        data = llm_azure.complete_json(_REGION_SYSTEM, user, max_tokens=200)
+    except Exception:
+        return {"in_region": True, "study_location": ""}
+    return {
+        "in_region": bool(data.get("in_region", True)),
+        "study_location": str(data.get("study_location", "") or "").strip(),
+    }
