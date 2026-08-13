@@ -43,6 +43,7 @@ from .sources import elsevier, openalex
 OUT_DIR = os.path.join(SETTINGS.output_dir, "cpa")
 ARTICLES_CSV = os.path.join(OUT_DIR, "cpa_articles.csv")
 SCREEN_CSV = os.path.join(OUT_DIR, "cpa_screen.csv")
+SCREEN_FULL_CSV = os.path.join(OUT_DIR, "cpa_screen_noncandidates.csv")
 RECALL_CSV = os.path.join(OUT_DIR, "cpa_recall_sample.csv")
 CODED_CSV = os.path.join(OUT_DIR, "cpa_corpus_coded.csv")
 COUNTS_CSV = os.path.join(OUT_DIR, "cpa_yearly_counts.csv")
@@ -242,6 +243,68 @@ def _recall_sample(articles: pd.DataFrame, refresh: bool = False) -> pd.DataFram
 
 
 # --------------------------------------------------------------------------
+# Step 2b: complete the screen — LLM-screen every remaining non-candidate on
+# its Elsevier abstract, so the corpus is a census rather than a lower bound.
+# (Recall of the keyword prefilter is capped by OpenAlex's thin CPA abstract
+# coverage; screening on Elsevier abstracts recovers the implicit-framing
+# papers the prefilter cannot reach.)
+# --------------------------------------------------------------------------
+def screen_full(refresh: bool = False) -> pd.DataFrame:
+    _ensure_dir()
+    if not llm_azure.is_configured():
+        raise SystemExit("Azure OpenAI not configured (needed for screening).")
+    if not os.path.exists(SCREEN_CSV):
+        screen()
+    articles = enumerate_journal()
+    already = set(pd.read_csv(SCREEN_CSV)["doi"].astype(str))   # keyword candidates
+    non = articles[(~articles["doi"].astype(str).isin(already))
+                   & articles["doi"].astype(str).str.len().gt(0)]
+
+    # Resume prior full-screen rows, and reuse the recall sample (already screened).
+    done: dict[str, dict] = {}
+    if os.path.exists(SCREEN_FULL_CSV) and not refresh:
+        done = {str(r["doi"]): r for r in pd.read_csv(SCREEN_FULL_CSV).to_dict("records")}
+    if os.path.exists(RECALL_CSV):
+        for r in pd.read_csv(RECALL_CSV).to_dict("records"):
+            done.setdefault(str(r["doi"]), r)
+
+    rows = []
+    for i, a in enumerate(non.to_dict("records"), 1):
+        doi = str(a["doi"])
+        if doi in done:
+            d = done[doi]
+            rows.append({"doi": doi, "openalex_id": a["openalex_id"], "year": a["year"],
+                         "title": a["title"], "is_env": bool(d.get("is_env")),
+                         "confidence": d.get("confidence", ""), "rationale": d.get("rationale", "")})
+            continue
+        text = _text_for(doi, a["title"], want_fulltext=False)
+        res = _screen_one(a["title"], text)
+        rows.append({"doi": doi, "openalex_id": a["openalex_id"], "year": a["year"],
+                     "title": a["title"], **res})
+        if i % 25 == 0:
+            print(f"[screen_full] {i}/{len(non)} non-candidates screened")
+            pd.DataFrame(rows).to_csv(SCREEN_FULL_CSV, index=False)
+    df = pd.DataFrame(rows)
+    df.to_csv(SCREEN_FULL_CSV, index=False)
+    found = int(df["is_env"].sum())
+    print(f"[screen_full] {found} additional env papers found among "
+          f"{len(non)} non-candidates -> {SCREEN_FULL_CSV}")
+    return df
+
+
+def _corpus_dois() -> set[str]:
+    """Confirmed-env DOIs from the candidate screen + (if run) the full screen."""
+    dois: set[str] = set()
+    for path in (SCREEN_CSV, SCREEN_FULL_CSV):
+        if os.path.exists(path):
+            d = pd.read_csv(path)
+            dois |= set(d[d["is_env"] == True]["doi"].astype(str))  # noqa: E712
+    dois.discard("")
+    dois.discard("nan")
+    return dois
+
+
+# --------------------------------------------------------------------------
 # Step 3: code the corpus on the four EAR axes (LLM over full text)
 # --------------------------------------------------------------------------
 _CODE_SYS = (
@@ -305,29 +368,28 @@ def code(refresh: bool = False) -> pd.DataFrame:
     _ensure_dir()
     if not os.path.exists(SCREEN_CSV):
         screen()
-    screen_df = pd.read_csv(SCREEN_CSV)
-    corpus = screen_df[screen_df["is_env"] == True].copy()  # noqa: E712
-    articles = enumerate_journal().set_index("doi")
+    corpus_dois = _corpus_dois()
+    articles = enumerate_journal()
+    corpus = articles[articles["doi"].astype(str).isin(corpus_dois)].copy()
 
     done: dict[str, dict] = {}
     if os.path.exists(CODED_CSV) and not refresh:
-        done = {r["doi"]: r for r in pd.read_csv(CODED_CSV).to_dict("records")}
+        done = {str(r["doi"]): r for r in pd.read_csv(CODED_CSV).to_dict("records")}
 
     rows = []
     for i, a in enumerate(corpus.to_dict("records"), 1):
-        doi = a["doi"]
+        doi = str(a["doi"])
         if doi in done:
             rows.append(done[doi]); continue
         text = _text_for(doi, a["title"], want_fulltext=True)
         art = elsevier.fetch_article(doi, want_fulltext=True) if doi else None
         codes = _code_one(a["title"], text)
-        base = articles.loc[doi] if doi in articles.index else {}
         rows.append({
             "doi": doi, "openalex_id": a["openalex_id"], "year": a["year"],
             "title": a["title"],
-            "cited_by_count": int(base.get("cited_by_count", 0)) if len(base) else 0,
-            "volume": base.get("volume", "") if len(base) else "",
-            "issue": base.get("issue", "") if len(base) else "",
+            "cited_by_count": int(a.get("cited_by_count", 0) or 0),
+            "volume": a.get("volume", ""),
+            "issue": a.get("issue", ""),
             "text_source": ("fulltext" if (art and art.has_fulltext) else "abstract"),
             **codes,
         })
@@ -455,6 +517,7 @@ def _write_manifest() -> None:
 STEPS = {
     "enumerate": lambda: enumerate_journal(refresh=True),
     "screen": screen,
+    "screen_full": screen_full,
     "code": code,
     "counts": counts,
     "cite": cite,

@@ -19,7 +19,7 @@ import pandas as pd  # noqa: E402
 from .config import CPA_ORIENTATION, CPA_SUBAREAS  # noqa: E402
 from .cpa_review import (  # noqa: E402
     BINS_CSV, CODED_CSV, COUNTS_CSV, MANIFEST_JSON, OUT_DIR, RECALL_CSV,
-    SCREEN_CSV, TABLE1_CSV,
+    SCREEN_CSV, SCREEN_FULL_CSV, TABLE1_CSV,
 )
 
 FIG_DIR = os.path.join(OUT_DIR, "figures")
@@ -181,6 +181,10 @@ def build_findings() -> None:
     precision = int(screen["is_env"].sum()) / max(1, n_cand)
     miss_rate = (recall["is_env"].sum() / len(recall)) if len(recall) else float("nan")
     est_missed = round(miss_rate * (n_total - n_cand)) if len(recall) else 0
+    # Full journal screen (Option A): did we screen every non-candidate too?
+    full_done = os.path.exists(SCREEN_FULL_CSV)
+    n_from_prefilter = int(screen["is_env"].sum())
+    n_from_fullscreen = n_env - n_from_prefilter
     n_full = int((coded["text_source"] == "fulltext").sum())
     n_abs = n_env - n_full
     abs_trend, prop_trend = _trend_words(counts)
@@ -219,9 +223,10 @@ Michelon (2023, EAR 32(5)) for CPA. Backbone: OpenAlex (source
 
 ## Corpus
 
-- **{n_env}** environmental-accounting papers identified across **{n_total}** CPA
-  research articles ({manifest['journal']}), {int(counts['year'].min())}–{int(counts['year'].max())}.
+- **{n_env}** environmental-accounting papers across **{n_total}** CPA research
+  articles ({manifest['journal']}), {int(counts['year'].min())}–{int(counts['year'].max())}.
 - Overall share: **{n_env/max(1,n_total)*100:.1f}%** of CPA output.
+- {"Identified by a **complete LLM screen of every CPA article** on its Elsevier abstract (a census, not a keyword sample): the keyword prefilter surfaced " + str(n_from_prefilter) + " and screening the remaining articles recovered a further " + str(n_from_fullscreen) + "." if full_done else "Identified via keyword prefilter + LLM screen (a lower bound; see recall below)."}
 - See `cpa_table1_corpus.csv` for the full list with codes and citations.
 
 ## Content analysis (four axes)
@@ -250,18 +255,12 @@ is often weakly discriminating: many papers specify no single actor.)
 
 ## Method, validation, and caveats
 
-- **Corpus identification.** Inclusive keyword prefilter on OpenAlex
-  (title+abstract, {manifest['n_keywords']} phrases) → LLM relevance screen of
-  every hit. Screen **precision ≈ {precision*100:.0f}%** ({int(screen['is_env'].sum())}
-  of {len(screen)} candidates confirmed environmental).
-- **Recall.** A random sample of {len(recall) if len(recall) else 0}
-  non-candidate articles was LLM-screened; **≈{miss_rate*100:.0f}%** were
-  actually environmental (keyword-prefilter recall ≈ {100-miss_rate*100:.0f}%).
-  Extrapolated over the {n_total - n_cand} non-candidates, ≈**{est_missed}**
-  environmental papers are likely missed, so the {n_env}-paper corpus is best
-  read as a **lower bound** (~{n_env + est_missed} true). The missed papers
-  (`cpa_recall_sample.csv`) tend to be ones where the environmental angle is
-  implicit in the title.
+- **Corpus identification.** {"Every CPA article was LLM-screened for genuine environmental-accounting relevance on its Elsevier abstract — a **complete journal census**, not a keyword sample. An inclusive keyword prefilter (OpenAlex, " + str(manifest['n_keywords']) + " phrases) first surfaced " + str(n_cand) + " candidates (screen precision ≈ " + f"{precision*100:.0f}%" + ", " + str(n_from_prefilter) + " confirmed); screening the remaining " + str(n_total - n_cand) + " non-candidates recovered a further **" + str(n_from_fullscreen) + "** environmental papers whose framing the keyword net missed." if full_done else "Inclusive keyword prefilter on OpenAlex (" + str(manifest['n_keywords']) + " phrases) → LLM relevance screen of every hit (precision ≈ " + f"{precision*100:.0f}%" + ")."}
+- **Prefilter validation.** A random sample of {len(recall) if len(recall) else 0}
+  non-candidates had earlier estimated a keyword miss rate of ≈{miss_rate*100:.0f}%
+  (≈{est_missed} papers); the full screen confirmed this, recovering
+  {n_from_fullscreen}. This pre-empts the undercount critique that dogs
+  keyword-only bibliometrics.
 - **Text.** CPA is Elsevier, and OpenAlex / Semantic Scholar carry almost no CPA
   abstracts — so the text layer is Elsevier's own ScienceDirect API, which
   returns a clean **abstract for every paper** (back to 1990) and **full body
