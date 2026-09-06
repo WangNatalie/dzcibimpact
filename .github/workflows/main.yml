@@ -1,0 +1,18 @@
+name: Supabase health check
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'   # Mondays 09:00 UTC
+  workflow_dispatch:       # lets you run it manually from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Auth health
+        env:
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          curl -sS -f -X GET \
+            "https://zwohuknoukpnetrcjltr.supabase.co/auth/v1/health" \
+            -H "apikey: $SUPABASE_KEY"
